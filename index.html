@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSV → text2qti Plain-Text Generator for Canvas</title>
+<style>
+html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #111; background: #f7f7fb; }
+.header { background: #201D52; color: #fff; padding: 24px; }
+.header h1 { margin: 0 0 8px 0; font-size: 22px; font-weight: 700; }
+.header p { margin: 0; font-size: 14px; opacity: 0.9; }
+.container { max-width: 1040px; margin: 24px auto; padding: 0 16px 48px 16px; }
+.card { background: #fff; border-radius: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 18px; overflow: visible; }
+.card h2 { margin: 0 0 8px 0; font-size: 18px; }
+.card p { margin: 8px 0; font-size: 14px; }
+.controls { display: grid; grid-template-columns: 1fr; gap: 12px; }
+label { font-size: 14px; font-weight: 600; display: block; margin-bottom: 6px; }
+input[type="file"] { padding: 8px; background: #f1f1f7; border-radius: 10px; border: 1px solid #e6e6ef; width: 100%; }
+input[type="text"] { padding: 10px 12px; border-radius: 10px; border: 1px solid #e6e6ef; width: 100%; box-sizing: border-box; font-size: 14px; }
+textarea { width: 100%; min-height: 360px; border-radius: 12px; border: 1px solid #e4e4ee; padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 13px; background: #fafafe; box-sizing: border-box; }
+.buttonrow { display: flex; flex-wrap: wrap; gap: 10px; }
+button, a.buttonlink { appearance: none; border: none; background: #6465F1; color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 14px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+button.secondary, a.secondary { background: #8F37EB; }
+button.ghost, a.ghost { background: #201D52; }
+button.gray { background: #4e4e5e; }
+.small { font-size: 12px; opacity: 0.85; }
+.kv { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 12px 18px; align-items: start; }
+.kv div { padding: 6px 0; line-height: 1.35; word-break: break-word; overflow-wrap: anywhere; }
+hr { border: none; height: 1px; background: #eee; margin: 16px 0; }
+.notice { background: #DCE5E9; color: #201D52; border-radius: 12px; padding: 12px; font-size: 13px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.panel { background: #f6f7fb; border: 1px solid #e8e9f3; border-radius: 12px; padding: 12px; }
+.linkrow { display: flex; flex-wrap: wrap; gap: 10px; }
+footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
+.previewwrap { display: grid; grid-template-columns: 1fr; gap: 14px; }
+.previewbox { background: #fff; border: 1px solid #e4e4ee; border-radius: 10px; padding: 10px; min-height: 260px; display: flex; align-items: center; justify-content: center; max-width: 100%; box-sizing: border-box; }
+.previewbox img { max-width: 100%; height: auto; display: block; }
+.field { margin-bottom: 12px; }
+.fieldrow { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.fieldrow.two { grid-template-columns: 1fr 1fr; }
+@media (max-width: 640px) { .fieldrow.two { grid-template-columns: 1fr; } }
+.helpcode { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; background: #fff; border: 1px solid #e4e4ee; padding: 10px; border-radius: 10px; width: 100%; box-sizing: border-box; white-space: pre-wrap; word-break: break-word; overflow: auto; }
+.only-bottom { display: flex; justify-content: center; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>CSV → text2qti Plain-Text Generator for Canvas</h1>
+  <p>Upload a CSV and get plain text ready to convert to a QTI .zip for Canvas. Images in the prompt and in answer choices are optional and supported.</p>
+</div>
+
+<div class="container">
+  <div class="card">
+    <h2>How to use</h2>
+    <p>Prepare your CSV using the template below. Each row is a single item. The TXT we generate includes only content rows, never the CSV header.</p>
+    <div class="buttonrow">
+      <button id="downloadTemplate">Download Template CSV</button>
+    </div>
+    <div class="notice">
+      Upload quiz images into your Canvas course Files and copy their URLs, or use any https image URL. Width and height are optional. After converting to QTI, import in Canvas.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>CSV columns</h2>
+    <div class="kv">
+      <div>Type</div><div>MC, MR, TF, NUM, SA, ESSAY, FILE, TEXT, QUIZ_META</div>
+      <div>Title</div><div>Optional question or TEXT title</div>
+      <div>Points</div><div>Positive integer or half-points; ignored for TEXT and QUIZ_META</div>
+      <div>Body</div><div>Question prompt or TEXT content</div>
+      <div>Answer1..Answer5</div><div>MC/MR/TF choice texts; SA acceptable answers; NUM rule in Answer1</div>
+      <div>Correct</div><div>MC/TF single number 1–5; MR comma list like 1,3</div>
+      <div>GeneralFeedback</div><div>Shown for all answers when supported</div>
+      <div>CorrectFeedback</div><div>Shown on correct</div>
+      <div>IncorrectFeedback</div><div>Shown on incorrect</div>
+      <div>Choice1Feedback..Choice5Feedback</div><div>Optional per-choice feedback F..J</div>
+      <div>TextTitle</div><div>For Type=TEXT</div>
+      <div>TextContent</div><div>For Type=TEXT</div>
+      <div>QuizTitle</div><div>For Type=QUIZ_META</div>
+      <div>QuizDescription</div><div>For Type=QUIZ_META</div>
+      <div>BodyImageURL</div><div>Optional image for the prompt</div>
+      <div>BodyImageAlt</div><div>Alt text for the prompt image</div>
+      <div>BodyImageWidth</div><div>Width in px or %, example 300 or 60%</div>
+      <div>BodyImageHeight</div><div>Height in px or %, example 200 or 40%</div>
+      <div>Answer1ImageURL..Answer5ImageURL</div><div>Optional image per choice</div>
+      <div>Answer1ImageAlt..Answer5ImageAlt</div><div>Alt text per choice image</div>
+      <div>Answer1ImageWidth..Answer5ImageWidth</div><div>Width per choice image</div>
+      <div>Answer1ImageHeight..Answer5ImageHeight</div><div>Height per choice image</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Question type instructions</h2>
+    <div class="grid2">
+      <div class="panel"><b>MC</b><p>Single correct choice. Put choices in Answer1..Answer5. Put the correct index in Correct, for example 3. Optional per-choice images via AnswerXImageURL fields.</p></div>
+      <div class="panel"><b>MR</b><p>Multiple correct choices. Put choices in Answer1..Answer5. Put a comma list in Correct, for example 1,3. Optional per-choice images.</p></div>
+      <div class="panel"><b>TF</b><p>Use Answer1=True and Answer2=False or your own labels. Put Correct=1 for True or 2 for False. Optional per-choice images.</p></div>
+      <div class="panel"><b>NUM</b><p>Put the rule in Answer1. Examples: 5 for exact; [1.2598, 1.2600] for range; 1.4142 +- 0.0001 or 100 +- 5% for margin.</p></div>
+      <div class="panel"><b>SA</b><p>Put acceptable exact answers in Answer1..Answer5. Case sensitivity follows Canvas/text2qti behavior.</p></div>
+      <div class="panel"><b>ESSAY</b><p>No answers needed. You can include a Body image if you want. The generator adds the essay marker automatically.</p></div>
+      <div class="panel"><b>FILE</b><p>No answers needed. The generator adds the file-upload marker automatically. You can include a Body image.</p></div>
+      <div class="panel"><b>TEXT</b><p>Non-question content. Use TextTitle and TextContent. No points. Body images are ignored for TEXT.</p></div>
+      <div class="panel"><b>QUIZ_META</b><p>Set QuizTitle and QuizDescription for the top of the TXT. No other fields used. Place this as the first row.</p></div>
+      <div class="panel"><b>Images</b><p>Use any https URL or a Canvas Files URL. Width and Height are optional. If only Width is provided, Height can be blank. Values accept px like 320 or percent like 60%.</p></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>CSV → TXT</h2>
+    <div class="controls">
+      <label for="csvFile">Choose CSV file</label>
+      <input type="file" id="csvFile" accept=".csv,text/csv">
+      <div class="buttonrow">
+        <button id="convertBtn">Convert CSV → Plain Text</button>
+        <button id="clearBtn" class="gray">Clear</button>
+      </div>
+    </div>
+    <textarea id="output" placeholder="Your text2qti-compatible plain text will appear here. The header row is never included."></textarea>
+    <div class="buttonrow" style="margin-top:10px;">
+      <button id="copyBtn">Copy To Clipboard</button>
+      <button id="downloadTxtBtn" class="secondary">Download .txt</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Image size helper</h2>
+    <div class="previewwrap">
+      <div class="previewbox">
+        <img id="imgPreview" alt="">
+      </div>
+      <div class="field">
+        <label for="imgInput">Upload image</label>
+        <input type="file" id="imgInput" accept="image/*">
+      </div>
+      <div class="field">
+        <label>Natural size</label>
+        <div id="naturalDims">–</div>
+      </div>
+      <div class="fieldrow two">
+        <div class="field">
+          <label for="wInput">Width</label>
+          <input id="wInput" type="text" placeholder="320 or 60%">
+        </div>
+        <div class="field">
+          <label for="hInput">Height</label>
+          <input id="hInput" type="text" placeholder="optional, 200 or 40%">
+        </div>
+      </div>
+      <div class="field">
+        <label for="altInput">Alt text</label>
+        <input id="altInput" type="text" placeholder="description">
+      </div>
+      <div class="field">
+        <div class="small">Copy this into any CSV image URL/size fields (replace URL as needed):</div>
+        <div class="helpcode" id="mdPreview">![alt](URL){width=320 height=200}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card only-bottom">
+    <button id="goToConverterBottom" class="secondary">Continue to Converter</button>
+  </div>
+</div>
+
+<footer>CSV → text2qti Generator • Works offline in your browser</footer>
+
+<script>
+function parseCSV(text) {
+  var rows = [];
+  var i = 0;
+  var field = "";
+  var row = [];
+  var inQuotes = false;
+  while (i < text.length) {
+    var c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (i + 1 < text.length && text[i + 1] === '"') {
+          field += '"';
+          i += 2;
+        } else {
+          inQuotes = false;
+          i += 1;
+        }
+      } else {
+        field += c;
+        i += 1;
+      }
+    } else {
+      if (c === '"') {
+        inQuotes = true;
+        i += 1;
+      } else if (c === ",") {
+        row.push(field);
+        field = "";
+        i += 1;
+      } else if (c === "\r") {
+        i += 1;
+      } else if (c === "\n") {
+        row.push(field);
+        rows.push(row);
+        row = [];
+        field = "";
+        i += 1;
+      } else {
+        field += c;
+        i += 1;
+      }
+    }
+  }
+  row.push(field);
+  rows.push(row);
+  return rows;
+}
+
+function safe(v) { if (v === undefined || v === null) return ""; return String(v).trim(); }
+function has(val) { return val && String(val).trim().length > 0; }
+
+function imgLine(url, alt, w, h) {
+  if (!has(url)) return "";
+  var attrs = [];
+  if (has(w)) attrs.push("width=" + w);
+  if (has(h)) attrs.push("height=" + h);
+  var attr = attrs.length ? "{" + attrs.join(" ") + "}" : "";
+  var altText = has(alt) ? alt : "";
+  return "![" + altText + "](" + url + ")" + attr;
+}
+
+function headerIndexMap(header) {
+  var idx = {};
+  for (var i = 0; i < header.length; i++) idx[header[i].toLowerCase()] = i;
+  return function(name) {
+    var key = name.toLowerCase();
+    return idx.hasOwnProperty(key) ? idx[key] : -1;
+  };
+}
+
+function buildTextFromRows(rows) {
+  if (!rows || rows.length === 0) return "";
+  var header = rows[0].map(safe);
+  var col = headerIndexMap(header);
+  var out = [];
+  for (var r = 1; r < rows.length; r++) {
+    var row = rows[r];
+    if (!row || row.length === 0) continue;
+    var type = safe(row[col("Type")]).toUpperCase();
+    if (!has(type)) continue;
+    if (type === "QUIZ_META") {
+      var qtitle = safe(row[col("QuizTitle")]);
+      var qdesc = safe(row[col("QuizDescription")]);
+      if (has(qtitle)) out.push("Quiz title: " + qtitle);
+      if (has(qdesc)) out.push("Quiz description: " + qdesc);
+      continue;
+    }
+    if (type === "TEXT") {
+      var tTitle = safe(row[col("TextTitle")]);
+      var tBody = safe(row[col("TextContent")]);
+      if (has(tTitle)) out.push("Text title:  " + tTitle);
+      if (has(tBody)) out.push("Text:  " + tBody);
+      continue;
+    }
+    var title = safe(row[col("Title")]);
+    var points = safe(row[col("Points")]);
+    var body = safe(row[col("Body")]);
+    var bUrl = safe(row[col("BodyImageURL")]);
+    var bAlt = safe(row[col("BodyImageAlt")]);
+    var bW = safe(row[col("BodyImageWidth")]);
+    var bH = safe(row[col("BodyImageHeight")]);
+    var a1 = safe(row[col("Answer1")]);
+    var a2 = safe(row[col("Answer2")]);
+    var a3 = safe(row[col("Answer3")]);
+    var a4 = safe(row[col("Answer4")]);
+    var a5 = safe(row[col("Answer5")]);
+    var cAns = safe(row[col("Correct")]);
+    var gfb = safe(row[col("GeneralFeedback")]);
+    var cfb = safe(row[col("CorrectFeedback")]);
+    var ifb = safe(row[col("IncorrectFeedback")]);
+    var ch1fb = safe(row[col("Choice1Feedback")]);
+    var ch2fb = safe(row[col("Choice2Feedback")]);
+    var ch3fb = safe(row[col("Choice3Feedback")]);
+    var ch4fb = safe(row[col("Choice4Feedback")]);
+    var ch5fb = safe(row[col("Choice5Feedback")]);
+    var aiu1 = safe(row[col("Answer1ImageURL")]);
+    var aia1 = safe(row[col("Answer1ImageAlt")]);
+    var aiw1 = safe(row[col("Answer1ImageWidth")]);
+    var aih1 = safe(row[col("Answer1ImageHeight")]);
+    var aiu2 = safe(row[col("Answer2ImageURL")]);
+    var aia2 = safe(row[col("Answer2ImageAlt")]);
+    var aiw2 = safe(row[col("Answer2ImageWidth")]);
+    var aih2 = safe(row[col("Answer2ImageHeight")]);
+    var aiu3 = safe(row[col("Answer3ImageURL")]);
+    var aia3 = safe(row[col("Answer3ImageAlt")]);
+    var aiw3 = safe(row[col("Answer3ImageWidth")]);
+    var aih3 = safe(row[col("Answer3ImageHeight")]);
+    var aiu4 = safe(row[col("Answer4ImageURL")]);
+    var aia4 = safe(row[col("Answer4ImageAlt")]);
+    var aiw4 = safe(row[col("Answer4ImageWidth")]);
+    var aih4 = safe(row[col("Answer4ImageHeight")]);
+    var aiu5 = safe(row[col("Answer5ImageURL")]);
+    var aia5 = safe(row[col("Answer5ImageAlt")]);
+    var aiw5 = safe(row[col("Answer5ImageWidth")]);
+    var aih5 = safe(row[col("Answer5ImageHeight")]);
+    if (has(title)) out.push("Title: " + title);
+    if (has(points)) out.push("Points: " + points);
+    if (has(body)) out.push("1.  " + body);
+    var bodyImg = imgLine(bUrl, bAlt, bW, bH);
+    if (has(bodyImg)) out.push(bodyImg);
+    if (has(gfb)) out.push("... " + gfb);
+    if (has(cfb)) out.push("+   " + cfb);
+    if (has(ifb)) out.push("-   " + ifb);
+    if (type === "MC") {
+      var choices = [a1, a2, a3, a4, a5];
+      var correctIndex = parseInt(cAns, 10);
+      var chFB = [ch1fb, ch2fb, ch3fb, ch4fb, ch5fb];
+      var urls = [aiu1, aiu2, aiu3, aiu4, aiu5];
+      var alts = [aia1, aia2, aia3, aia4, aia5];
+      var ws = [aiw1, aiw2, aiw3, aiw4, aiw5];
+      var hs = [aih1, aih2, aih3, aih4, aih5];
+      for (var i = 0; i < choices.length; i++) {
+        if (!has(choices[i]) && !has(urls[i])) continue;
+        var letter = String.fromCharCode(97 + i);
+        var mark = (i + 1 === correctIndex) ? "*" : "";
+        var line = mark + letter + ")  " + (has(choices[i]) ? choices[i] : "");
+        out.push(line);
+        var img = imgLine(urls[i], alts[i], ws[i], hs[i]);
+        if (has(img)) out.push(img);
+        if (has(chFB[i])) out.push("... " + chFB[i]);
+      }
+      continue;
+    }
+    if (type === "TF") {
+      var tfChoices = [has(a1) ? a1 : "True", has(a2) ? a2 : "False"];
+      var tfCorrectIndex = parseInt(cAns, 10);
+      var tfUrls = [aiu1, aiu2];
+      var tfAlts = [aia1, aia2];
+      var tfWs = [aiw1, aiw2];
+      var tfHs = [aih1, aih2];
+      var tfFB = [ch1fb, ch2fb];
+      for (var j = 0; j < 2; j++) {
+        var ltr = String.fromCharCode(97 + j);
+        var marktf = (j + 1 === tfCorrectIndex) ? "*" : "";
+        out.push(marktf + ltr + ")  " + tfChoices[j]);
+        var timg = imgLine(tfUrls[j], tfAlts[j], tfWs[j], tfHs[j]);
+        if (has(timg)) out.push(timg);
+        if (has(tfFB[j])) out.push("... " + tfFB[j]);
+      }
+      continue;
+    }
+    if (type === "MR") {
+      var mrChoices = [a1, a2, a3, a4, a5];
+      var mrUrls = [aiu1, aiu2, aiu3, aiu4, aiu5];
+      var mrAlts = [aia1, aia2, aia3, aia4, aia5];
+      var mrWs = [aiw1, aiw2, aiw3, aiw4, aiw5];
+      var mrHs = [aih1, aih2, aih3, aih4, aih5];
+      var mrfb = [ch1fb, ch2fb, ch3fb, ch4fb, ch5fb];
+      var correctSet = {};
+      if (has(cAns)) {
+        var parts = cAns.split(",");
+        for (var k = 0; k < parts.length; k++) {
+          var num = parseInt(parts[k].trim(), 10);
+          if (!isNaN(num)) correctSet[num - 1] = true;
+        }
+      }
+      for (var m = 0; m < mrChoices.length; m++) {
+        if (!has(mrChoices[m]) && !has(mrUrls[m])) continue;
+        var markmr = correctSet[m] ? "[*]" : "[ ]";
+        out.push(markmr + " " + (has(mrChoices[m]) ? mrChoices[m] : ""));
+        var mrimg = imgLine(mrUrls[m], mrAlts[m], mrWs[m], mrHs[m]);
+        if (has(mrimg)) out.push(mrimg);
+        if (has(mrfb[m])) out.push("... " + mrfb[m]);
+      }
+      continue;
+    }
+    if (type === "NUM") {
+      if (has(a1)) out.push("=   " + a1);
+      continue;
+    }
+    if (type === "SA") {
+      var sa = [a1, a2, a3, a4, a5];
+      for (var s = 0; s < sa.length; s++) {
+        if (has(sa[s])) out.push("*   " + sa[s]);
+      }
+      continue;
+    }
+    if (type === "ESSAY") {
+      out.push("____");
+      continue;
+    }
+    if (type === "FILE") {
+      out.push("^^^^");
+      continue;
+    }
+  }
+  return out.join("\n");
+}
+
+function downloadBlob(filename, text, mime) {
+  var blob = new Blob([text], {type: mime || "text/plain;charset=utf-8"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(url);
+  a.remove();
+}
+
+function generateTemplateCSV() {
+  var headers = [
+    "Type","Title","Points","Body","Answer1","Answer2","Answer3","Answer4","Answer5",
+    "Correct","GeneralFeedback","CorrectFeedback","IncorrectFeedback",
+    "Choice1Feedback","Choice2Feedback","Choice3Feedback","Choice4Feedback","Choice5Feedback",
+    "TextTitle","TextContent","QuizTitle","QuizDescription",
+    "BodyImageURL","BodyImageAlt","BodyImageWidth","BodyImageHeight",
+    "Answer1ImageURL","Answer1ImageAlt","Answer1ImageWidth","Answer1ImageHeight",
+    "Answer2ImageURL","Answer2ImageAlt","Answer2ImageWidth","Answer2ImageHeight",
+    "Answer3ImageURL","Answer3ImageAlt","Answer3ImageWidth","Answer3ImageHeight",
+    "Answer4ImageURL","Answer4ImageAlt","Answer4ImageWidth","Answer4ImageHeight",
+    "Answer5ImageURL","Answer5ImageAlt","Answer5ImageWidth","Answer5ImageHeight"
+  ];
+  var rows = [];
+  rows.push([
+    "QUIZ_META","","","","","","","","","","","","","","","","","","","","My First Quiz",
+    "This quiz was generated from a CSV and converted with your text converter.",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","",""
+  ]);
+  rows.push([
+    "TEXT","Read First","","","", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "Instructions","Answer all questions below.","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","",""
+  ]);
+  rows.push([
+    "MC","Basic Addition With Image","2","What is 2 + 3?","6","1","5","10","","3",
+    "General feedback for this question.","Great job.","Check your addition.",
+    "6 is too high.","1 is too low.","Correct.","10 is not correct.","",
+    "","","","",
+    "https://example.com/prompt.png","Prompt image","320","200",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","",""
+  ]);
+  rows.push([
+    "MR","Dinosaurs","3","Which of the following are dinosaurs?",
+    "Woolly mammoth","Tyrannosaurus rex","Triceratops","Smilodon fatalis","",
+    "2,3",
+    "Multiple correct answers are possible.","Nice selection.","Review prehistoric animals.",
+    "Mammoth is a mammal.","T. rex is a dinosaur.","Triceratops is a dinosaur.","Smilodon is a mammal.","",
+    "","","","",
+    "","","","",
+    "https://example.com/trex.jpg","T. rex","260","",
+    "https://example.com/trike.jpg","Triceratops","260","",
+    "","","","",
+    "","","",""
+  ]);
+  rows.push([
+    "TF","State of Water","1","Water is liquid.","True","False","","","",
+    "1",
+    "","","",
+    "Correct.","","","Incorrect.","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","",""
+  ]);
+  rows.push([
+    "NUM","Square Root","2","What is the square root of 2?","1.4142 +- 0.0001","","","","",
+    "",
+    "Any value within the margin is accepted.","","","","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","",""
+  ]);
+  rows.push([
+    "SA","North Pole Resident","2","Who lives at the North Pole?","Santa","Santa Claus","Father Christmas","Saint Nicholas","Saint Nick",
+    "",
+    "Any of the listed names earn full credit.","","","","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","",""
+  ]);
+  rows.push([
+    "ESSAY","Short Essay","5","Write an essay about lab safety best practices.","","","","","",
+    "","","","","","","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","",""
+  ]);
+  rows.push([
+    "FILE","Upload Diagram","0","Upload a photo of your lab setup.","","","","","",
+    "","","","","","","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","",""
+  ]);
+  var data = [headers].concat(rows).map(function(arr){ return arr.map(function(x){
+    var s = String(x === undefined ? "" : x);
+    if (s.indexOf('"') !== -1 || s.indexOf(",") !== -1 || s.indexOf("\n") !== -1) {
+      s = '"' + s.replace(/"/g,'""') + '"';
+    }
+    return s;
+  }).join(","); }).join("\n");
+  return data;
+}
+
+var fileInput = document.getElementById("csvFile");
+var convertBtn = document.getElementById("convertBtn");
+var clearBtn = document.getElementById("clearBtn");
+var output = document.getElementById("output");
+var copyBtn = document.getElementById("copyBtn");
+var downloadTxtBtn = document.getElementById("downloadTxtBtn");
+var downloadTemplate = document.getElementById("downloadTemplate");
+
+convertBtn.addEventListener("click", function(){
+  if (!fileInput.files || fileInput.files.length === 0) {
+    alert("Please choose a CSV file first.");
+    return;
+  }
+  var file = fileInput.files[0];
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var text = e.target.result || "";
+    var rows = parseCSV(text);
+    var out = buildTextFromRows(rows);
+    output.value = out;
+    if (out.trim().length === 0) {
+      alert("No output produced. Check your headers and rows.");
+    }
+  };
+  reader.readAsText(file);
+});
+
+clearBtn.addEventListener("click", function(){
+  fileInput.value = "";
+  output.value = "";
+});
+
+copyBtn.addEventListener("click", function(){
+  output.select();
+  document.execCommand("copy");
+  alert("Copied to clipboard.");
+});
+
+downloadTxtBtn.addEventListener("click", function(){
+  var text = output.value || "";
+  if (text.trim().length === 0) {
+    alert("No text to download.");
+    return;
+  }
+  downloadBlob("quiz.txt", text, "text/plain;charset=utf-8");
+});
+
+downloadTemplate.addEventListener("click", function(){
+  var csv = generateTemplateCSV();
+  downloadBlob("canvas_csv_template_all_types_with_images.csv", csv, "text/csv;charset=utf-8");
+});
+
+var imgInput = document.getElementById("imgInput");
+var imgPreview = document.getElementById("imgPreview");
+var naturalDims = document.getElementById("naturalDims");
+var wInput = document.getElementById("wInput");
+var hInput = document.getElementById("hInput");
+var altInput = document.getElementById("altInput");
+var mdPreview = document.getElementById("mdPreview");
+
+function updateMdPreview() {
+  var url = imgPreview.src || "URL";
+  var alt = altInput.value || "alt";
+  var w = wInput.value || "320";
+  var h = hInput.value || "200";
+  var attrs = "{width=" + w + " height=" + h + "}";
+  mdPreview.textContent = "![" + alt + "](" + url + ")" + attrs;
+}
+
+imgInput.addEventListener("change", function(){
+  var f = imgInput.files && imgInput.files[0];
+  if (!f) return;
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    imgPreview.src = ev.target.result;
+    var tempImg = new Image();
+    tempImg.onload = function(){
+      naturalDims.textContent = tempImg.naturalWidth + " × " + tempImg.naturalHeight + " px";
+      wInput.value = String(tempImg.naturalWidth);
+      hInput.value = String(tempImg.naturalHeight);
+      altInput.value = "";
+      updateMdPreview();
+    };
+    tempImg.src = ev.target.result;
+  };
+  reader.readAsDataURL(f);
+});
+
+[wInput, hInput, altInput].forEach(function(el){
+  el.addEventListener("input", updateMdPreview);
+});
+
+document.getElementById("goToConverterBottom").addEventListener("click", function(){
+  window.open("http://ec2-34-207-154-191.compute-1.amazonaws.com", "_blank");
+});
+</script>
+</body>
+</html>
