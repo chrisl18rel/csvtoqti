@@ -1,3 +1,4 @@
+<!-- csv-to-text2qti-no-images.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -33,76 +34,203 @@ hr { border: none; height: 1px; background: #eee; margin: 16px 0; }
 .panel { background: #f6f7fb; border: 1px solid #e8e9f3; border-radius: 12px; padding: 12px; }
 .linkrow { display: flex; flex-wrap: wrap; gap: 10px; }
 footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
-.previewwrap { display: grid; grid-template-columns: 1fr; gap: 14px; }
-.previewbox { background: #fff; border: 1px solid #e4e4ee; border-radius: 10px; padding: 10px; min-height: 260px; display: flex; align-items: center; justify-content: center; max-width: 100%; box-sizing: border-box; }
-.previewbox img { max-width: 100%; height: auto; display: block; }
 .field { margin-bottom: 12px; }
 .fieldrow { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .fieldrow.two { grid-template-columns: 1fr 1fr; }
 @media (max-width: 640px) { .fieldrow.two { grid-template-columns: 1fr; } }
 .helpcode { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; background: #fff; border: 1px solid #e4e4ee; padding: 10px; border-radius: 10px; width: 100%; box-sizing: border-box; white-space: pre-wrap; word-break: break-word; overflow: auto; }
 .only-bottom { display: flex; justify-content: center; }
+.group-info { background: #f0f8ff; border-left: 4px solid #6465F1; padding: 12px; margin: 10px 0; border-radius: 6px; }
+.example-box { background: #f8f8f8; border: 1px solid #ddd; padding: 10px; border-radius: 6px; margin: 10px 0; font-family: monospace; font-size: 13px; }
 </style>
 </head>
 <body>
 <div class="header">
   <h1>CSV → text2qti Plain-Text Generator for Canvas</h1>
-  <p>Upload a CSV and get plain text ready to convert to a QTI .zip for Canvas. Images in the prompt and in answer choices are optional and supported.</p>
+  <p>Upload a CSV and get plain text ready to convert to a QTI .zip for Canvas with question grouping and random selection support.</p>
 </div>
 
 <div class="container">
   <div class="card">
     <h2>How to use</h2>
-    <p>Prepare your CSV using the template below. Each row is a single item. The TXT we generate includes only content rows, never the CSV header.</p>
+    <p>Prepare your CSV using the template below. <strong>Row 2 is reserved for quiz title and description only. Questions start at row 3.</strong> The TXT we generate includes only content rows, never the CSV header.</p>
     <div class="buttonrow">
       <button id="downloadTemplate">Download Template CSV</button>
     </div>
     <div class="notice">
-      Upload quiz images into your Canvas course Files and copy their URLs, or use any https image URL. Width and height are optional. After converting to QTI, import in Canvas.
+      <strong>Structure:</strong> Row 1 = Headers | Row 2 = Quiz Title & Description | Row 3+ = Questions<br>
+      The QuestionNumber column is for your reference only and won't appear in the output.<br>
+      After generating the plain text, convert it to QTI format and import into Canvas.
     </div>
   </div>
 
   <div class="card">
-    <h2>CSV columns</h2>
+    <h2>CSV columns (in order)</h2>
     <div class="kv">
-      <div>Type</div><div>MC, MR, TF, NUM, SA, ESSAY, FILE, TEXT, QUIZ_META</div>
-      <div>Title</div><div>Optional question or TEXT title</div>
-      <div>Points</div><div>Positive integer or half-points; ignored for TEXT and QUIZ_META</div>
-      <div>Body</div><div>Question prompt or TEXT content</div>
-      <div>Answer1..Answer5</div><div>MC/MR/TF choice texts; SA acceptable answers; NUM rule in Answer1</div>
-      <div>Correct</div><div>MC/TF single number 1–5; MR comma list like 1,3</div>
-      <div>GeneralFeedback</div><div>Shown for all answers when supported</div>
-      <div>CorrectFeedback</div><div>Shown on correct</div>
-      <div>IncorrectFeedback</div><div>Shown on incorrect</div>
-      <div>Choice1Feedback..Choice5Feedback</div><div>Optional per-choice feedback F..J</div>
-      <div>TextTitle</div><div>For Type=TEXT</div>
-      <div>TextContent</div><div>For Type=TEXT</div>
-      <div>QuizTitle</div><div>For Type=QUIZ_META</div>
-      <div>QuizDescription</div><div>For Type=QUIZ_META</div>
-      <div>BodyImageURL</div><div>Optional image for the prompt</div>
-      <div>BodyImageAlt</div><div>Alt text for the prompt image</div>
-      <div>BodyImageWidth</div><div>Width in px or %, example 300 or 60%</div>
-      <div>BodyImageHeight</div><div>Height in px or %, example 200 or 40%</div>
-      <div>Answer1ImageURL..Answer5ImageURL</div><div>Optional image per choice</div>
-      <div>Answer1ImageAlt..Answer5ImageAlt</div><div>Alt text per choice image</div>
-      <div>Answer1ImageWidth..Answer5ImageWidth</div><div>Width per choice image</div>
-      <div>Answer1ImageHeight..Answer5ImageHeight</div><div>Height per choice image</div>
+      <div>QuizTitle (A)</div><div>Title of the quiz (use on row 2 only)</div>
+      <div>QuizDescription (B)</div><div>Description of the quiz (use on row 2 only)</div>
+      <div>QuestionNumber (C)</div><div>For your reference only - not included in output (pre-numbered in template)</div>
+      <div>Group (D)</div><div>Group name for organizing questions (e.g., "Chapter 1", "Easy Questions"). Leave blank for no grouping.</div>
+      <div>GroupPick (E)</div><div>Number of questions to randomly select from this group (optional, use only on first row of a new group)</div>
+      <div>GroupPointsPerQuestion (F)</div><div>Points per question when randomly selected (optional, use only on first row of a new group)</div>
+      <div>Type (G)</div><div>MC, MR, TF, NUM, SA, ESSAY, FILE, TEXT</div>
+      <div>Title (H)</div><div>Optional question or TEXT title</div>
+      <div>Points (I)</div><div>Positive integer or half-points; ignored for TEXT and when GroupPointsPerQuestion is used</div>
+      <div>Body (J)</div><div>Question prompt or TEXT content</div>
+      <div>Answer1..Answer5 (K-O)</div><div>MC/MR/TF choice texts; SA acceptable answers; NUM rule in Answer1</div>
+      <div>Correct (P)</div><div>MC/TF single number 1–5; MR comma list like 1,3</div>
+      <div>GeneralFeedback (Q)</div><div>Shown for all answers when supported</div>
+      <div>CorrectFeedback (R)</div><div>Shown on correct</div>
+      <div>IncorrectFeedback (S)</div><div>Shown on incorrect</div>
+      <div>Choice1Feedback..Choice5Feedback (T-X)</div><div>Optional per-choice feedback</div>
+      <div>TextTitle (Y)</div><div>For Type=TEXT</div>
+      <div>TextContent (Z)</div><div>For Type=TEXT</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Question Grouping and Random Selection</h2>
+    <div class="group-info">
+      <strong>📚 What is Grouping?</strong><br>
+      Grouping organizes related questions together (like "Chapter 1" or "Easy Questions"). This helps structure your quiz and enables random question selection.
+    </div>
+    
+    <div class="group-info">
+      <strong>✅ How to Use Groups:</strong><br>
+      <ul style="margin: 5px 0; padding-left: 20px;">
+        <li><b>To group questions:</b> Enter the same group name in column C for all questions you want together</li>
+        <li><b>To leave ungrouped:</b> Simply leave column C blank - the question stands alone</li>
+        <li><b>Group names:</b> Use any name like "Chapter 1", "Atoms", "Lab Safety", etc.</li>
+      </ul>
+    </div>
+    
+    <div class="group-info">
+      <strong>🎲 Random Selection (Optional):</strong><br>
+      Want Canvas to randomly pick only some questions from a group? Use columns D and E on the <b>first row of each new group</b>:
+      <ul style="margin: 5px 0; padding-left: 20px;">
+        <li><b>Column D (GroupPick):</b> How many questions to randomly select</li>
+        <li><b>Column E (GroupPointsPerQuestion):</b> Points each selected question is worth</li>
+        <li><b>Important:</b> Only fill these in on the first question of a new group, leave blank for other rows</li>
+      </ul>
+    </div>
+    
+    <div class="example-box">
+      <strong>📋 Examples:</strong><br><br>
+      <b>Scenario 1: Random subset with uniform points</b><br>
+      • Group="Chapter 1", GroupPick=2, GroupPointsPerQuestion=5<br>
+      • You have 5 questions in Chapter 1<br>
+      → <em>Canvas randomly picks 2 of the 5 questions, each worth 5 points (10 points total)</em><br><br>
+      
+      <b>Scenario 2: All questions with individual points</b><br>
+      • Group="Chapter 2" (leave GroupPick and GroupPointsPerQuestion blank)<br>
+      • Questions have Points=2, 3, 5, etc.<br>
+      → <em>All Chapter 2 questions appear, each worth their individual point values</em><br><br>
+      
+      <b>Scenario 3: No grouping</b><br>
+      • Leave Group column blank<br>
+      → <em>Question appears by itself, not part of any group</em>
+    </div>
+    
+    <div class="example-box" style="overflow-x: auto;">
+      <strong>📊 Visual CSV Example (showing questions from row 3 onwards) - Notice GroupPick & GroupPointsPerQuestion only on FIRST row of each group:</strong><br><br>
+      <table style="border-collapse: collapse; font-size: 12px; width: 100%; min-width: 600px;">
+        <thead>
+          <tr style="background: #f0f0f0;">
+            <th style="border: 1px solid #ddd; padding: 4px;">QuestionNumber</th>
+            <th style="border: 1px solid #ddd; padding: 4px;">Group</th>
+            <th style="border: 1px solid #ddd; padding: 4px;">GroupPick</th>
+            <th style="border: 1px solid #ddd; padding: 4px;">GroupPointsPerQuestion</th>
+            <th style="border: 1px solid #ddd; padding: 4px;">Type</th>
+            <th style="border: 1px solid #ddd; padding: 4px;">Body</th>
+            <th style="border: 1px solid #ddd; padding: 4px;">...</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background: #e8f4fd;">
+            <td style="border: 1px solid #ddd; padding: 4px;">1</td>
+            <td style="border: 1px solid #ddd; padding: 4px;"><b>Chapter 1</b></td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #ffffcc;"><b>2</b></td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #ffffcc;"><b>3</b></td>
+            <td style="border: 1px solid #ddd; padding: 4px;">MC</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">What is H₂O?</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 4px;">2</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">Chapter 1</td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
+            <td style="border: 1px solid #ddd; padding: 4px;">TF</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">Water boils at 100°C</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 4px;">3</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">Chapter 1</td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
+            <td style="border: 1px solid #ddd; padding: 4px;">MC</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">pH of pure water?</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
+          </tr>
+          <tr style="background: #ffe8e8;">
+            <td style="border: 1px solid #ddd; padding: 4px;">4</td>
+            <td style="border: 1px solid #ddd; padding: 4px;"><b>Chapter 2</b></td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
+            <td style="border: 1px solid #ddd; padding: 4px;">MC</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">What is an atom?</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 4px;">5</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">Chapter 2</td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
+            <td style="border: 1px solid #ddd; padding: 4px;">NUM</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">Atomic number of Carbon?</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
+          </tr>
+          <tr style="background: #f0f0f0;">
+            <td style="border: 1px solid #ddd; padding: 4px;">6</td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
+            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
+            <td style="border: 1px solid #ddd; padding: 4px;">TF</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">All acids are dangerous</td>
+            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
+          </tr>
+        </tbody>
+      </table>
+      <br>
+      <div style="font-size: 12px;">
+        <b>Note:</b> Row 2 (not shown) contains only QuizTitle and QuizDescription. Questions start at Row 3.<br>
+        <span style="background: #e8f4fd; padding: 2px 6px;">Blue rows</span> = First row of Chapter 1 (picks 2 random questions, 3 pts each)<br>
+        <span style="background: #ffe8e8; padding: 2px 6px;">Pink row</span> = First row of Chapter 2 (all questions included, individual points)<br>
+        <span style="background: #f0f0f0; padding: 2px 6px;">Gray row</span> = No group (standalone question)<br>
+        <span style="background: #ffffcc; padding: 2px 6px;">Yellow cells</span> = GroupPick/GroupPointsPerQuestion ONLY on first row of group!
+      </div>
+    </div>
+    
+    <div class="notice">
+      <strong>💡 Tips:</strong> 
+      • GroupPick is great for creating question pools where students get different questions<br>
+      • When using GroupPointsPerQuestion, individual Points values are ignored for that group<br>
+      • You can mix grouped and ungrouped questions in the same quiz
     </div>
   </div>
 
   <div class="card">
     <h2>Question type instructions</h2>
     <div class="grid2">
-      <div class="panel"><b>MC</b><p>Single correct choice. Put choices in Answer1..Answer5. Put the correct index in Correct, for example 3. Optional per-choice images via AnswerXImageURL fields.</p></div>
-      <div class="panel"><b>MR</b><p>Multiple correct choices. Put choices in Answer1..Answer5. Put a comma list in Correct, for example 1,3. Optional per-choice images.</p></div>
-      <div class="panel"><b>TF</b><p>Use Answer1=True and Answer2=False or your own labels. Put Correct=1 for True or 2 for False. Optional per-choice images.</p></div>
+      <div class="panel"><b>MC</b><p>Single correct choice. Put choices in Answer1..Answer5. Put the correct index in Correct, for example 3.</p></div>
+      <div class="panel"><b>MR</b><p>Multiple correct choices. Put choices in Answer1..Answer5. Put a comma list in Correct, for example 1,3.</p></div>
+      <div class="panel"><b>TF</b><p>Use Answer1=True and Answer2=False or your own labels. Put Correct=1 for True or 2 for False.</p></div>
       <div class="panel"><b>NUM</b><p>Put the rule in Answer1. Examples: 5 for exact; [1.2598, 1.2600] for range; 1.4142 +- 0.0001 or 100 +- 5% for margin.</p></div>
       <div class="panel"><b>SA</b><p>Put acceptable exact answers in Answer1..Answer5. Case sensitivity follows Canvas/text2qti behavior.</p></div>
-      <div class="panel"><b>ESSAY</b><p>No answers needed. You can include a Body image if you want. The generator adds the essay marker automatically.</p></div>
-      <div class="panel"><b>FILE</b><p>No answers needed. The generator adds the file-upload marker automatically. You can include a Body image.</p></div>
-      <div class="panel"><b>TEXT</b><p>Non-question content. Use TextTitle and TextContent. No points. Body images are ignored for TEXT.</p></div>
-      <div class="panel"><b>QUIZ_META</b><p>Set QuizTitle and QuizDescription for the top of the TXT. No other fields used. Place this as the first row.</p></div>
-      <div class="panel"><b>Images</b><p>Use any https URL or a Canvas Files URL. Width and Height are optional. If only Width is provided, Height can be blank. Values accept px like 320 or percent like 60%.</p></div>
+      <div class="panel"><b>ESSAY</b><p>No answers needed. The generator adds the essay marker automatically.</p></div>
+      <div class="panel"><b>FILE</b><p>No answers needed. The generator adds the file-upload marker automatically.</p></div>
+      <div class="panel"><b>TEXT</b><p>Non-question content. Use TextTitle and TextContent. No points.</p></div>
     </div>
   </div>
 
@@ -123,43 +251,8 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
     </div>
   </div>
 
-  <div class="card">
-    <h2>Image size helper</h2>
-    <div class="previewwrap">
-      <div class="previewbox">
-        <img id="imgPreview" alt="">
-      </div>
-      <div class="field">
-        <label for="imgInput">Upload image</label>
-        <input type="file" id="imgInput" accept="image/*">
-      </div>
-      <div class="field">
-        <label>Natural size</label>
-        <div id="naturalDims">–</div>
-      </div>
-      <div class="fieldrow two">
-        <div class="field">
-          <label for="wInput">Width</label>
-          <input id="wInput" type="text" placeholder="320 or 60%">
-        </div>
-        <div class="field">
-          <label for="hInput">Height</label>
-          <input id="hInput" type="text" placeholder="optional, 200 or 40%">
-        </div>
-      </div>
-      <div class="field">
-        <label for="altInput">Alt text</label>
-        <input id="altInput" type="text" placeholder="description">
-      </div>
-      <div class="field">
-        <div class="small">Copy this into any CSV image URL/size fields (replace URL as needed):</div>
-        <div class="helpcode" id="mdPreview">![alt](URL){width=320 height=200}</div>
-      </div>
-    </div>
-  </div>
-
   <div class="card only-bottom">
-    <button id="goToConverterBottom" class="secondary">Continue to Converter</button>
+    <button id="goToConverterBottom" class="secondary">Continue to text2qti Converter</button>
   </div>
 </div>
 
@@ -217,16 +310,6 @@ function parseCSV(text) {
 function safe(v) { if (v === undefined || v === null) return ""; return String(v).trim(); }
 function has(val) { return val && String(val).trim().length > 0; }
 
-function imgLine(url, alt, w, h) {
-  if (!has(url)) return "";
-  var attrs = [];
-  if (has(w)) attrs.push("width=" + w);
-  if (has(h)) attrs.push("height=" + h);
-  var attr = attrs.length ? "{" + attrs.join(" ") + "}" : "";
-  var altText = has(alt) ? alt : "";
-  return "![" + altText + "](" + url + ")" + attr;
-}
-
 function headerIndexMap(header) {
   var idx = {};
   for (var i = 0; i < header.length; i++) idx[header[i].toLowerCase()] = i;
@@ -241,18 +324,43 @@ function buildTextFromRows(rows) {
   var header = rows[0].map(safe);
   var col = headerIndexMap(header);
   var out = [];
-  for (var r = 1; r < rows.length; r++) {
+  var currentGroup = "";
+  
+  // Handle quiz title and description from row 2
+  if (rows.length > 1) {
+    var titleRow = rows[1];
+    var qtitle = safe(titleRow[col("QuizTitle")]);
+    var qdesc = safe(titleRow[col("QuizDescription")]);
+    if (has(qtitle)) out.push("Quiz title: " + qtitle);
+    if (has(qdesc)) out.push("Quiz description: " + qdesc);
+  }
+  
+  // Process questions starting from row 3
+  for (var r = 2; r < rows.length; r++) {
     var row = rows[r];
     if (!row || row.length === 0) continue;
+    
+    var group = safe(row[col("Group")]);
+    var groupPick = safe(row[col("GroupPick")]);
+    var groupPoints = safe(row[col("GroupPointsPerQuestion")]);
     var type = safe(row[col("Type")]).toUpperCase();
+    
     if (!has(type)) continue;
-    if (type === "QUIZ_META") {
-      var qtitle = safe(row[col("QuizTitle")]);
-      var qdesc = safe(row[col("QuizDescription")]);
-      if (has(qtitle)) out.push("Quiz title: " + qtitle);
-      if (has(qdesc)) out.push("Quiz description: " + qdesc);
-      continue;
+    
+    // Handle group changes
+    if (has(group) && group !== currentGroup) {
+      var groupLine = "Group: " + group;
+      // Add pick and points if specified
+      if (has(groupPick)) {
+        groupLine += " pick " + groupPick;
+        if (has(groupPoints)) {
+          groupLine += " points per question " + groupPoints;
+        }
+      }
+      out.push(groupLine);
+      currentGroup = group;
     }
+    
     if (type === "TEXT") {
       var tTitle = safe(row[col("TextTitle")]);
       var tBody = safe(row[col("TextContent")]);
@@ -260,13 +368,10 @@ function buildTextFromRows(rows) {
       if (has(tBody)) out.push("Text:  " + tBody);
       continue;
     }
+    
     var title = safe(row[col("Title")]);
     var points = safe(row[col("Points")]);
     var body = safe(row[col("Body")]);
-    var bUrl = safe(row[col("BodyImageURL")]);
-    var bAlt = safe(row[col("BodyImageAlt")]);
-    var bW = safe(row[col("BodyImageWidth")]);
-    var bH = safe(row[col("BodyImageHeight")]);
     var a1 = safe(row[col("Answer1")]);
     var a2 = safe(row[col("Answer2")]);
     var a3 = safe(row[col("Answer3")]);
@@ -281,78 +386,45 @@ function buildTextFromRows(rows) {
     var ch3fb = safe(row[col("Choice3Feedback")]);
     var ch4fb = safe(row[col("Choice4Feedback")]);
     var ch5fb = safe(row[col("Choice5Feedback")]);
-    var aiu1 = safe(row[col("Answer1ImageURL")]);
-    var aia1 = safe(row[col("Answer1ImageAlt")]);
-    var aiw1 = safe(row[col("Answer1ImageWidth")]);
-    var aih1 = safe(row[col("Answer1ImageHeight")]);
-    var aiu2 = safe(row[col("Answer2ImageURL")]);
-    var aia2 = safe(row[col("Answer2ImageAlt")]);
-    var aiw2 = safe(row[col("Answer2ImageWidth")]);
-    var aih2 = safe(row[col("Answer2ImageHeight")]);
-    var aiu3 = safe(row[col("Answer3ImageURL")]);
-    var aia3 = safe(row[col("Answer3ImageAlt")]);
-    var aiw3 = safe(row[col("Answer3ImageWidth")]);
-    var aih3 = safe(row[col("Answer3ImageHeight")]);
-    var aiu4 = safe(row[col("Answer4ImageURL")]);
-    var aia4 = safe(row[col("Answer4ImageAlt")]);
-    var aiw4 = safe(row[col("Answer4ImageWidth")]);
-    var aih4 = safe(row[col("Answer4ImageHeight")]);
-    var aiu5 = safe(row[col("Answer5ImageURL")]);
-    var aia5 = safe(row[col("Answer5ImageAlt")]);
-    var aiw5 = safe(row[col("Answer5ImageWidth")]);
-    var aih5 = safe(row[col("Answer5ImageHeight")]);
+    
     if (has(title)) out.push("Title: " + title);
     if (has(points)) out.push("Points: " + points);
     if (has(body)) out.push("1.  " + body);
-    var bodyImg = imgLine(bUrl, bAlt, bW, bH);
-    if (has(bodyImg)) out.push(bodyImg);
+    
     if (has(gfb)) out.push("... " + gfb);
     if (has(cfb)) out.push("+   " + cfb);
     if (has(ifb)) out.push("-   " + ifb);
+    
     if (type === "MC") {
       var choices = [a1, a2, a3, a4, a5];
       var correctIndex = parseInt(cAns, 10);
       var chFB = [ch1fb, ch2fb, ch3fb, ch4fb, ch5fb];
-      var urls = [aiu1, aiu2, aiu3, aiu4, aiu5];
-      var alts = [aia1, aia2, aia3, aia4, aia5];
-      var ws = [aiw1, aiw2, aiw3, aiw4, aiw5];
-      var hs = [aih1, aih2, aih3, aih4, aih5];
       for (var i = 0; i < choices.length; i++) {
-        if (!has(choices[i]) && !has(urls[i])) continue;
+        if (!has(choices[i])) continue;
         var letter = String.fromCharCode(97 + i);
         var mark = (i + 1 === correctIndex) ? "*" : "";
-        var line = mark + letter + ")  " + (has(choices[i]) ? choices[i] : "");
+        var line = mark + letter + ")  " + choices[i];
         out.push(line);
-        var img = imgLine(urls[i], alts[i], ws[i], hs[i]);
-        if (has(img)) out.push(img);
         if (has(chFB[i])) out.push("... " + chFB[i]);
       }
       continue;
     }
+    
     if (type === "TF") {
       var tfChoices = [has(a1) ? a1 : "True", has(a2) ? a2 : "False"];
       var tfCorrectIndex = parseInt(cAns, 10);
-      var tfUrls = [aiu1, aiu2];
-      var tfAlts = [aia1, aia2];
-      var tfWs = [aiw1, aiw2];
-      var tfHs = [aih1, aih2];
       var tfFB = [ch1fb, ch2fb];
       for (var j = 0; j < 2; j++) {
         var ltr = String.fromCharCode(97 + j);
         var marktf = (j + 1 === tfCorrectIndex) ? "*" : "";
         out.push(marktf + ltr + ")  " + tfChoices[j]);
-        var timg = imgLine(tfUrls[j], tfAlts[j], tfWs[j], tfHs[j]);
-        if (has(timg)) out.push(timg);
         if (has(tfFB[j])) out.push("... " + tfFB[j]);
       }
       continue;
     }
+    
     if (type === "MR") {
       var mrChoices = [a1, a2, a3, a4, a5];
-      var mrUrls = [aiu1, aiu2, aiu3, aiu4, aiu5];
-      var mrAlts = [aia1, aia2, aia3, aia4, aia5];
-      var mrWs = [aiw1, aiw2, aiw3, aiw4, aiw5];
-      var mrHs = [aih1, aih2, aih3, aih4, aih5];
       var mrfb = [ch1fb, ch2fb, ch3fb, ch4fb, ch5fb];
       var correctSet = {};
       if (has(cAns)) {
@@ -363,19 +435,19 @@ function buildTextFromRows(rows) {
         }
       }
       for (var m = 0; m < mrChoices.length; m++) {
-        if (!has(mrChoices[m]) && !has(mrUrls[m])) continue;
+        if (!has(mrChoices[m])) continue;
         var markmr = correctSet[m] ? "[*]" : "[ ]";
-        out.push(markmr + " " + (has(mrChoices[m]) ? mrChoices[m] : ""));
-        var mrimg = imgLine(mrUrls[m], mrAlts[m], mrWs[m], mrHs[m]);
-        if (has(mrimg)) out.push(mrimg);
+        out.push(markmr + " " + mrChoices[m]);
         if (has(mrfb[m])) out.push("... " + mrfb[m]);
       }
       continue;
     }
+    
     if (type === "NUM") {
       if (has(a1)) out.push("=   " + a1);
       continue;
     }
+    
     if (type === "SA") {
       var sa = [a1, a2, a3, a4, a5];
       for (var s = 0; s < sa.length; s++) {
@@ -383,10 +455,12 @@ function buildTextFromRows(rows) {
       }
       continue;
     }
+    
     if (type === "ESSAY") {
       out.push("____");
       continue;
     }
+    
     if (type === "FILE") {
       out.push("^^^^");
       continue;
@@ -409,111 +483,131 @@ function downloadBlob(filename, text, mime) {
 
 function generateTemplateCSV() {
   var headers = [
-    "Type","Title","Points","Body","Answer1","Answer2","Answer3","Answer4","Answer5",
+    "QuizTitle","QuizDescription","QuestionNumber","Group","GroupPick","GroupPointsPerQuestion",
+    "Type","Title","Points","Body",
+    "Answer1","Answer2","Answer3","Answer4","Answer5",
     "Correct","GeneralFeedback","CorrectFeedback","IncorrectFeedback",
     "Choice1Feedback","Choice2Feedback","Choice3Feedback","Choice4Feedback","Choice5Feedback",
-    "TextTitle","TextContent","QuizTitle","QuizDescription",
-    "BodyImageURL","BodyImageAlt","BodyImageWidth","BodyImageHeight",
-    "Answer1ImageURL","Answer1ImageAlt","Answer1ImageWidth","Answer1ImageHeight",
-    "Answer2ImageURL","Answer2ImageAlt","Answer2ImageWidth","Answer2ImageHeight",
-    "Answer3ImageURL","Answer3ImageAlt","Answer3ImageWidth","Answer3ImageHeight",
-    "Answer4ImageURL","Answer4ImageAlt","Answer4ImageWidth","Answer4ImageHeight",
-    "Answer5ImageURL","Answer5ImageAlt","Answer5ImageWidth","Answer5ImageHeight"
+    "TextTitle","TextContent"
   ];
   var rows = [];
+  
+  // Row 2 - Quiz title and description only
   rows.push([
-    "QUIZ_META","","","","","","","","","","","","","","","","","","","","My First Quiz",
-    "This quiz was generated from a CSV and converted with your text converter.",
+    "My Chemistry Quiz","This quiz covers chapters 1-3 with random selection and grouping.",
     "","","","",
     "","","","",
+    "","","","","",
     "","","","",
-    "","","","",
-    "","","","",
-    "","","",""
+    "","","","","",
+    "",""
   ]);
+  
+  // Row 3 - First question (TEXT instructions, Chapter 1 group with random selection)
   rows.push([
-    "TEXT","Read First","","","", "", "", "", "", "", "", "", "", "", "", "", "", "",
-    "Instructions","Answer all questions below.","","",
+    "","",
+    "1","Chapter 1","2","3",
+    "TEXT","Read First","","",
+    "","","","","",
     "","","","",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","",""
+    "","","","","",
+    "Instructions","Answer all questions carefully."
   ]);
+  
+  // Chapter 1 questions (will pick 2 of these 3 randomly, each worth 3 points)
   rows.push([
-    "MC","Basic Addition With Image","2","What is 2 + 3?","6","1","5","10","","3",
-    "General feedback for this question.","Great job.","Check your addition.",
-    "6 is too high.","1 is too low.","Correct.","10 is not correct.","",
-    "","","","",
-    "https://example.com/prompt.png","Prompt image","320","200",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","",""
+    "","",
+    "2","Chapter 1","","",
+    "MC","Basic Addition","","What is 2 + 3?",
+    "6","1","5","10","",
+    "3","General feedback for this question.","Great job!","Check your addition.",
+    "6 is too high.","1 is too low.","Correct!","10 is not correct.","",
+    "",""
   ]);
+  
   rows.push([
-    "MR","Dinosaurs","3","Which of the following are dinosaurs?",
-    "Woolly mammoth","Tyrannosaurus rex","Triceratops","Smilodon fatalis","",
-    "2,3",
-    "Multiple correct answers are possible.","Nice selection.","Review prehistoric animals.",
-    "Mammoth is a mammal.","T. rex is a dinosaur.","Triceratops is a dinosaur.","Smilodon is a mammal.","",
-    "","","","",
-    "","","","",
-    "https://example.com/trex.jpg","T. rex","260","",
-    "https://example.com/trike.jpg","Triceratops","260","",
-    "","","","",
-    "","","",""
+    "","",
+    "3","Chapter 1","","",
+    "TF","State of Water","","Water is liquid at room temperature.",
+    "True","False","","","",
+    "1","","","",
+    "Correct.","Incorrect.","","","",
+    "",""
   ]);
+  
   rows.push([
-    "TF","State of Water","1","Water is liquid.","True","False","","","",
-    "1",
-    "","","",
-    "Correct.","","","Incorrect.","",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","",""
+    "","",
+    "4","Chapter 1","","",
+    "MC","Subtraction","","What is 10 - 7?",
+    "2","3","4","5","",
+    "2","","Good work!","Try again.",
+    "","Correct!","","","",
+    "",""
   ]);
+  
+  // Chapter 2 group - all questions included with individual points
   rows.push([
-    "NUM","Square Root","2","What is the square root of 2?","1.4142 +- 0.0001","","","","",
-    "",
-    "Any value within the margin is accepted.","","","","","","",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","",""
+    "","",
+    "5","Chapter 2","","",
+    "MR","Noble Gases","3","Which of the following are noble gases?",
+    "Oxygen","Helium","Neon","Nitrogen","Argon",
+    "2,3,5","Multiple correct answers.","Nice selection!","Review the periodic table.",
+    "Oxygen is not a noble gas.","Helium is a noble gas.","Neon is a noble gas.","Nitrogen is not a noble gas.","Argon is a noble gas.",
+    "",""
   ]);
+  
   rows.push([
-    "SA","North Pole Resident","2","Who lives at the North Pole?","Santa","Santa Claus","Father Christmas","Saint Nicholas","Saint Nick",
-    "",
-    "Any of the listed names earn full credit.","","","","","","",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","",""
+    "","",
+    "6","Chapter 2","","",
+    "NUM","Avogadro's Number","2","What is Avogadro's number (×10²³)?",
+    "6.022 +- 0.001","","","","",
+    "","Any value within the margin is accepted.","","",
+    "","","","","",
+    "",""
   ]);
+  
+  // Lab Questions group - pick 1 random question worth 5 points
   rows.push([
-    "ESSAY","Short Essay","5","Write an essay about lab safety best practices.","","","","","",
-    "","","","","","","","","",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","",""
+    "","",
+    "7","Lab Questions","1","5",
+    "SA","Lab Safety Equipment","","What protective equipment covers your eyes in the lab?",
+    "goggles","safety goggles","safety glasses","protective goggles","eye protection",
+    "","Any of the listed answers earn full credit.","","",
+    "","","","","",
+    "",""
   ]);
+  
   rows.push([
-    "FILE","Upload Diagram","0","Upload a photo of your lab setup.","","","","","",
-    "","","","","","","","","",
+    "","",
+    "8","Lab Questions","","",
+    "ESSAY","Lab Safety Essay","","Write an essay about lab safety best practices.",
+    "","","","","",
     "","","","",
-    "","","","",
-    "","","","",
-    "","","","",
-    "","","",""
+    "","","","","",
+    "",""
   ]);
+  
+  rows.push([
+    "","",
+    "9","Lab Questions","","",
+    "FILE","Upload Lab Report","","Upload your completed lab report as a PDF.",
+    "","","","","",
+    "","","","",
+    "","","","","",
+    "",""
+  ]);
+  
+  // Questions without a group (standalone)
+  rows.push([
+    "","",
+    "10","Lab Questions","","",
+    "TF","Chemical Safety","1","All chemicals should be treated as potentially hazardous.",
+    "True","False","","","",
+    "1","Safety first!","Correct!","Always treat chemicals with respect.",
+    "","","","","",
+    "",""
+  ]);
+  
   var data = [headers].concat(rows).map(function(arr){ return arr.map(function(x){
     var s = String(x === undefined ? "" : x);
     if (s.indexOf('"') !== -1 || s.indexOf(",") !== -1 || s.indexOf("\n") !== -1) {
@@ -573,47 +667,7 @@ downloadTxtBtn.addEventListener("click", function(){
 
 downloadTemplate.addEventListener("click", function(){
   var csv = generateTemplateCSV();
-  downloadBlob("canvas_csv_template_all_types_with_images.csv", csv, "text/csv;charset=utf-8");
-});
-
-var imgInput = document.getElementById("imgInput");
-var imgPreview = document.getElementById("imgPreview");
-var naturalDims = document.getElementById("naturalDims");
-var wInput = document.getElementById("wInput");
-var hInput = document.getElementById("hInput");
-var altInput = document.getElementById("altInput");
-var mdPreview = document.getElementById("mdPreview");
-
-function updateMdPreview() {
-  var url = imgPreview.src || "URL";
-  var alt = altInput.value || "alt";
-  var w = wInput.value || "320";
-  var h = hInput.value || "200";
-  var attrs = "{width=" + w + " height=" + h + "}";
-  mdPreview.textContent = "![" + alt + "](" + url + ")" + attrs;
-}
-
-imgInput.addEventListener("change", function(){
-  var f = imgInput.files && imgInput.files[0];
-  if (!f) return;
-  var reader = new FileReader();
-  reader.onload = function(ev){
-    imgPreview.src = ev.target.result;
-    var tempImg = new Image();
-    tempImg.onload = function(){
-      naturalDims.textContent = tempImg.naturalWidth + " × " + tempImg.naturalHeight + " px";
-      wInput.value = String(tempImg.naturalWidth);
-      hInput.value = String(tempImg.naturalHeight);
-      altInput.value = "";
-      updateMdPreview();
-    };
-    tempImg.src = ev.target.result;
-  };
-  reader.readAsDataURL(f);
-});
-
-[wInput, hInput, altInput].forEach(function(el){
-  el.addEventListener("input", updateMdPreview);
+  downloadBlob("canvas_quiz_template_with_groups_numbered.csv", csv, "text/csv;charset=utf-8");
 });
 
 document.getElementById("goToConverterBottom").addEventListener("click", function(){
