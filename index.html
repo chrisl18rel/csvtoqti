@@ -53,12 +53,13 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
 <div class="container">
   <div class="card">
     <h2>How to use</h2>
-    <p>Prepare your CSV using the template below. <strong>Row 2 is reserved for quiz title and description only. Questions start at row 3.</strong> The TXT we generate includes only content rows, never the CSV header.</p>
+    <p>Prepare your CSV using the template below. <strong>Row 2 is reserved for quiz title, description, and quiz settings only. Questions start at row 3.</strong> The TXT we generate includes only content rows, never the CSV header.</p>
     <div class="buttonrow">
       <button id="downloadTemplate">Download Template CSV</button>
-    </div>
+    </div><p></p>
     <div class="notice">
-      <strong>Structure:</strong> Row 1 = Headers | Row 2 = Quiz Title & Description | Row 3+ = Questions<br>
+      <strong>Structure:</strong> Row 1 = Headers | Row 2 = Quiz Info & Settings | Row 3+ = Questions<br>
+      <strong>Quiz Settings:</strong> ShuffleAnswers, ShowCorrectAnswers, OneQuestionAtATime, and CantGoBack are all set with "true" or "false" values in row 2.<br>
       The QuestionNumber column is for your reference only and won't appear in the output.<br>
       After generating the plain text, convert it to QTI format and import into Canvas.
     </div>
@@ -69,22 +70,40 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
     <div class="kv">
       <div>QuizTitle (A)</div><div>Title of the quiz (use on row 2 only)</div>
       <div>QuizDescription (B)</div><div>Description of the quiz (use on row 2 only)</div>
-      <div>QuestionNumber (C)</div><div>For your reference only - not included in output (pre-numbered in template)</div>
-      <div>Group (D)</div><div>Group name for organizing questions (e.g., "Chapter 1", "Easy Questions"). Leave blank for no grouping.</div>
-      <div>GroupPick (E)</div><div>Number of questions to randomly select from this group (optional, use only on first row of a new group)</div>
-      <div>GroupPointsPerQuestion (F)</div><div>Points per question when randomly selected (optional, use only on first row of a new group)</div>
-      <div>Type (G)</div><div>MC, MR, TF, NUM, SA, ESSAY, FILE, TEXT</div>
-      <div>Title (H)</div><div>Optional question or TEXT title</div>
-      <div>Points (I)</div><div>Positive integer or half-points; ignored for TEXT and when GroupPointsPerQuestion is used</div>
-      <div>Body (J)</div><div>Question prompt or TEXT content</div>
-      <div>Answer1..Answer5 (K-O)</div><div>MC/MR/TF choice texts; SA acceptable answers; NUM rule in Answer1</div>
-      <div>Correct (P)</div><div>MC/TF single number 1–5; MR comma list like 1,3</div>
-      <div>GeneralFeedback (Q)</div><div>Shown for all answers when supported</div>
-      <div>CorrectFeedback (R)</div><div>Shown on correct</div>
-      <div>IncorrectFeedback (S)</div><div>Shown on incorrect</div>
-      <div>Choice1Feedback..Choice5Feedback (T-X)</div><div>Optional per-choice feedback</div>
-      <div>TextTitle (Y)</div><div>For Type=TEXT</div>
-      <div>TextContent (Z)</div><div>For Type=TEXT</div>
+      <div>ShuffleAnswers (C)</div><div>true or false - randomize answer order (row 2 only)</div>
+      <div>ShowCorrectAnswers (D)</div><div>true or false - show correct answers after submission (row 2 only)</div>
+      <div>OneQuestionAtATime (E)</div><div>true or false - only show one question at a time (row 2 only)</div>
+      <div>CantGoBack (F)</div><div>true or false - don't allow going back when one-at-a-time (row 2 only)</div>
+      <div>QuestionNumber (G)</div><div>For your reference only - not included in output (pre-numbered)</div>
+      <div>Group (H)</div><div>Group name for organizing questions. Leave blank for no grouping.</div>
+      <div>GroupPick (I)</div><div>Number of questions to randomly select from this group (first row of group only)</div>
+      <div>GroupPointsPerQuestion (J)</div><div>Points per question when randomly selected (first row of group only)</div>
+      <div>Type (K)</div><div>MC, MR, TF, NUM, SA, ESSAY, FILE, TEXT</div>
+      <div>Title (L)</div><div>Optional question or TEXT title</div>
+      <div>Points (M)</div><div>Positive integer or half-points; ignored for TEXT and when GroupPointsPerQuestion is used</div>
+      <div>Body (N)</div><div>Question prompt or TEXT content</div>
+      <div>Answer1..Answer5 (O-S)</div><div>MC/MR/TF choice texts; SA acceptable answers; NUM rule in Answer1</div>
+      <div>Correct (T)</div><div>MC/TF single number 1–5; MR comma list like 1,3</div>
+      <div>GeneralFeedback (U)</div><div>Shown for all answers when supported</div>
+      <div>CorrectFeedback (V)</div><div>Shown on correct</div>
+      <div>IncorrectFeedback (W)</div><div>Shown on incorrect</div>
+      <div>Choice1Feedback..Choice5Feedback (X-AB)</div><div>Optional per-choice feedback</div>
+      <div>TextTitle (AC)</div><div>For Type=TEXT</div>
+      <div>TextContent (AD)</div><div>For Type=TEXT</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Quiz Settings (text2qti supported)</h2>
+    <p>These quiz-level settings can be configured in row 2 of your CSV (columns C-F). All are optional and use "true" or "false" values.</p>
+    <div class="grid2">
+      <div class="panel"><b>Shuffle Answers</b><p>Randomizes the order of answer choices for each question. Useful for preventing cheating when students compare answers.</p></div>
+      <div class="panel"><b>Show Correct Answers</b><p>Displays correct answers to students after quiz submission. Consider your pedagogical goals when setting this.</p></div>
+      <div class="panel"><b>One Question At A Time</b><p>Shows only one question per page instead of all questions at once. Can help students focus.</p></div>
+      <div class="panel"><b>Can't Go Back</b><p>When using one-question-at-a-time, prevents students from returning to previous questions. Use with caution.</p></div>
+    </div><p></p>
+    <div class="notice">
+      <strong>Note:</strong> Other Canvas settings like time limits, access codes, and multiple attempts must be configured directly in Canvas after importing the QTI file. text2qti doesn't support these settings.
     </div>
   </div>
 
@@ -98,18 +117,18 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
     <div class="group-info">
       <strong>✅ How to Use Groups:</strong><br>
       <ul style="margin: 5px 0; padding-left: 20px;">
-        <li><b>To group questions:</b> Enter the same group name in column C for all questions you want together</li>
-        <li><b>To leave ungrouped:</b> Simply leave column C blank - the question stands alone</li>
+        <li><b>To group questions:</b> Enter the same group name in column H for all questions you want together</li>
+        <li><b>To leave ungrouped:</b> Simply leave column H blank - the question stands alone</li>
         <li><b>Group names:</b> Use any name like "Chapter 1", "Atoms", "Lab Safety", etc.</li>
       </ul>
     </div>
     
     <div class="group-info">
       <strong>🎲 Random Selection (Optional):</strong><br>
-      Want Canvas to randomly pick only some questions from a group? Use columns D and E on the <b>first row of each new group</b>:
+      Want Canvas to randomly pick only some questions from a group? Use columns I and J on the <b>first row of each new group</b>:
       <ul style="margin: 5px 0; padding-left: 20px;">
-        <li><b>Column D (GroupPick):</b> How many questions to randomly select</li>
-        <li><b>Column E (GroupPointsPerQuestion):</b> Points each selected question is worth</li>
+        <li><b>Column I (GroupPick):</b> How many questions to randomly select</li>
+        <li><b>Column J (GroupPointsPerQuestion):</b> Points each selected question is worth</li>
         <li><b>Important:</b> Only fill these in on the first question of a new group, leave blank for other rows</li>
       </ul>
     </div>
@@ -204,7 +223,7 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
       </table>
       <br>
       <div style="font-size: 12px;">
-        <b>Note:</b> Row 2 (not shown) contains only QuizTitle and QuizDescription. Questions start at Row 3.<br>
+        <b>Note:</b> Row 2 (not shown) contains only QuizTitle, QuizDescription, and quiz settings. Questions start at Row 3.<br>
         <span style="background: #e8f4fd; padding: 2px 6px;">Blue rows</span> = First row of Chapter 1 (picks 2 random questions, 3 pts each)<br>
         <span style="background: #ffe8e8; padding: 2px 6px;">Pink row</span> = First row of Chapter 2 (all questions included, individual points)<br>
         <span style="background: #f0f0f0; padding: 2px 6px;">Gray row</span> = No group (standalone question)<br>
@@ -326,13 +345,24 @@ function buildTextFromRows(rows) {
   var out = [];
   var currentGroup = "";
   
-  // Handle quiz title and description from row 2
+  // Handle quiz title, description, and settings from row 2
   if (rows.length > 1) {
     var titleRow = rows[1];
     var qtitle = safe(titleRow[col("QuizTitle")]);
     var qdesc = safe(titleRow[col("QuizDescription")]);
+    var shuffleAnswers = safe(titleRow[col("ShuffleAnswers")]);
+    var showCorrectAnswers = safe(titleRow[col("ShowCorrectAnswers")]);
+    var oneQuestionAtATime = safe(titleRow[col("OneQuestionAtATime")]);
+    var cantGoBack = safe(titleRow[col("CantGoBack")]);
+    
     if (has(qtitle)) out.push("Quiz title: " + qtitle);
     if (has(qdesc)) out.push("Quiz description: " + qdesc);
+    
+    // Add quiz settings if specified
+    if (has(shuffleAnswers)) out.push("shuffle answers: " + shuffleAnswers.toLowerCase());
+    if (has(showCorrectAnswers)) out.push("show correct answers: " + showCorrectAnswers.toLowerCase());
+    if (has(oneQuestionAtATime)) out.push("one question at a time: " + oneQuestionAtATime.toLowerCase());
+    if (has(cantGoBack)) out.push("can't go back: " + cantGoBack.toLowerCase());
   }
   
   // Process questions starting from row 3
@@ -483,7 +513,8 @@ function downloadBlob(filename, text, mime) {
 
 function generateTemplateCSV() {
   var headers = [
-    "QuizTitle","QuizDescription","QuestionNumber","Group","GroupPick","GroupPointsPerQuestion",
+    "QuizTitle","QuizDescription","ShuffleAnswers","ShowCorrectAnswers","OneQuestionAtATime","CantGoBack",
+    "QuestionNumber","Group","GroupPick","GroupPointsPerQuestion",
     "Type","Title","Points","Body",
     "Answer1","Answer2","Answer3","Answer4","Answer5",
     "Correct","GeneralFeedback","CorrectFeedback","IncorrectFeedback",
@@ -492,9 +523,9 @@ function generateTemplateCSV() {
   ];
   var rows = [];
   
-  // Row 2 - Quiz title and description only
+  // Row 2 - Quiz title, description, and settings only
   rows.push([
-    "My Chemistry Quiz","This quiz covers chapters 1-3 with random selection and grouping.",
+    "My Chemistry Quiz","This quiz covers chapters 1-3 with random selection and grouping.","true","false","false","false",
     "","","","",
     "","","","",
     "","","","","",
@@ -505,7 +536,7 @@ function generateTemplateCSV() {
   
   // Row 3 - First question (TEXT instructions, Chapter 1 group with random selection)
   rows.push([
-    "","",
+    "","","","","","",
     "1","Chapter 1","2","3",
     "TEXT","Read First","","",
     "","","","","",
@@ -516,7 +547,7 @@ function generateTemplateCSV() {
   
   // Chapter 1 questions (will pick 2 of these 3 randomly, each worth 3 points)
   rows.push([
-    "","",
+    "","","","","","",
     "2","Chapter 1","","",
     "MC","Basic Addition","","What is 2 + 3?",
     "6","1","5","10","",
@@ -526,7 +557,7 @@ function generateTemplateCSV() {
   ]);
   
   rows.push([
-    "","",
+    "","","","","","",
     "3","Chapter 1","","",
     "TF","State of Water","","Water is liquid at room temperature.",
     "True","False","","","",
@@ -536,7 +567,7 @@ function generateTemplateCSV() {
   ]);
   
   rows.push([
-    "","",
+    "","","","","","",
     "4","Chapter 1","","",
     "MC","Subtraction","","What is 10 - 7?",
     "2","3","4","5","",
@@ -547,7 +578,7 @@ function generateTemplateCSV() {
   
   // Chapter 2 group - all questions included with individual points
   rows.push([
-    "","",
+    "","","","","","",
     "5","Chapter 2","","",
     "MR","Noble Gases","3","Which of the following are noble gases?",
     "Oxygen","Helium","Neon","Nitrogen","Argon",
@@ -557,7 +588,7 @@ function generateTemplateCSV() {
   ]);
   
   rows.push([
-    "","",
+    "","","","","","",
     "6","Chapter 2","","",
     "NUM","Avogadro's Number","2","What is Avogadro's number (×10²³)?",
     "6.022 +- 0.001","","","","",
@@ -568,7 +599,7 @@ function generateTemplateCSV() {
   
   // Lab Questions group - pick 1 random question worth 5 points
   rows.push([
-    "","",
+    "","","","","","",
     "7","Lab Questions","1","5",
     "SA","Lab Safety Equipment","","What protective equipment covers your eyes in the lab?",
     "goggles","safety goggles","safety glasses","protective goggles","eye protection",
@@ -578,7 +609,7 @@ function generateTemplateCSV() {
   ]);
   
   rows.push([
-    "","",
+    "","","","","","",
     "8","Lab Questions","","",
     "ESSAY","Lab Safety Essay","","Write an essay about lab safety best practices.",
     "","","","","",
@@ -588,7 +619,7 @@ function generateTemplateCSV() {
   ]);
   
   rows.push([
-    "","",
+    "","","","","","",
     "9","Lab Questions","","",
     "FILE","Upload Lab Report","","Upload your completed lab report as a PDF.",
     "","","","","",
@@ -599,7 +630,7 @@ function generateTemplateCSV() {
   
   // Questions without a group (standalone)
   rows.push([
-    "","",
+    "","","","","","",
     "10","Lab Questions","","",
     "TF","Chemical Safety","1","All chemicals should be treated as potentially hazardous.",
     "True","False","","","",
