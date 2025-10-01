@@ -344,6 +344,7 @@ function buildTextFromRows(rows) {
   var col = headerIndexMap(header);
   var out = [];
   var currentGroup = "";
+  var inGroup = false;
   
   // Handle quiz title, description, and settings from row 2
   if (rows.length > 1) {
@@ -379,16 +380,26 @@ function buildTextFromRows(rows) {
     
     // Handle group changes
     if (has(group) && group !== currentGroup) {
-      var groupLine = "Group: " + group;
-      // Add pick and points if specified
-      if (has(groupPick)) {
-        groupLine += " pick " + groupPick;
-        if (has(groupPoints)) {
-          groupLine += " points per question " + groupPoints;
-        }
+      // Close previous group if one was open
+      if (inGroup) {
+        out.push("END_GROUP");
       }
-      out.push(groupLine);
+      
+      // Start new group
+      out.push("GROUP");
+      if (has(groupPick)) {
+        out.push("pick: " + groupPick);
+      }
+      if (has(groupPoints)) {
+        out.push("points per question: " + groupPoints);
+      }
       currentGroup = group;
+      inGroup = true;
+    } else if (!has(group) && inGroup) {
+      // End group when moving to ungrouped question
+      out.push("END_GROUP");
+      currentGroup = "";
+      inGroup = false;
     }
     
     if (type === "TEXT") {
@@ -496,6 +507,12 @@ function buildTextFromRows(rows) {
       continue;
     }
   }
+  
+  // Close final group if one is still open
+  if (inGroup) {
+    out.push("END_GROUP");
+  }
+  
   return out.join("\n");
 }
 
