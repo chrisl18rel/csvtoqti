@@ -61,7 +61,10 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
       <strong>Structure:</strong> Row 1 = Headers | Row 2 = Quiz Info & Settings | Row 3+ = Questions<br>
       <strong>Quiz Settings:</strong> ShuffleAnswers, ShowCorrectAnswers, OneQuestionAtATime, and CantGoBack are all set with "true" or "false" values in row 2.<br>
       The QuestionNumber column is for your reference only and won't appear in the output.<br>
-      After generating the plain text, convert it to QTI format and import into Canvas.
+      After generating the plain text, convert it to QTI format and import into Canvas.<br><br>
+      <strong>⚠️ Important Converter Requirements:</strong><br>
+      • Point values MUST be integers (whole numbers only). The text2qti converter does not support decimal point values even though Canvas itself does.<br>
+      • Questions in the same group must all have the same point value when using GroupPointsPerQuestion.
     </div>
   </div>
 
@@ -80,7 +83,7 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
       <div>GroupPointsPerQuestion (J)</div><div>Points per question when randomly selected (first row of group only)</div>
       <div>Type (K)</div><div>MC, MR, TF, NUM, SA, ESSAY, FILE, TEXT</div>
       <div>Title (L)</div><div>Optional question or TEXT title</div>
-      <div>Points (M)</div><div>Positive integer or half-points; ignored for TEXT and when GroupPointsPerQuestion is used</div>
+      <div>Points (M)</div><div>Positive integer (whole numbers only - no decimals); ignored for TEXT and when GroupPointsPerQuestion is used</div>
       <div>Body (N)</div><div>Question prompt or TEXT content</div>
       <div>Answer1..Answer5 (O-S)</div><div>MC/MR/TF choice texts; SA acceptable answers; NUM rule in Answer1</div>
       <div>Correct (T)</div><div>MC/TF single number 1–5; MR comma list like 1,3</div>
@@ -607,7 +610,7 @@ function generateTemplateCSV() {
   rows.push([
     "","","","","","",
     "6","Chapter 2","","",
-    "NUM","Avogadro's Number","2","What is Avogadro's number (×10²³)?",
+    "NUM","Avogadro's Number","3","What is Avogadro's number (×10²³)?",
     "6.022 +- 0.001","","","","",
     "","Any value within the margin is accepted.","","",
     "","","","","",
