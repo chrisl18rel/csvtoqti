@@ -1,11 +1,11 @@
-<!-- csv-to-text2qti-no-images.html -->
+<!-- csv-to-canvas-converter.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CSV → text2qti Plain-Text Generator for Canvas</title>
+<title>CSV → Canvas Plain-Text Generator</title>
 <style>
 html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #111; background: #f7f7fb; }
 .header { background: #201D52; color: #fff; padding: 24px; }
@@ -46,24 +46,22 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
 </head>
 <body>
 <div class="header">
-  <h1>CSV → text2qti Plain-Text Generator for Canvas</h1>
-  <p>Upload a CSV and get plain text ready to convert to a QTI .zip for Canvas with question grouping and random selection support.</p>
+  <h1>CSV → Canvas Plain-Text Generator</h1>
+  <p>Upload a CSV and get plain text ready to convert to Canvas format with question grouping and random selection support.</p>
 </div>
 
 <div class="container">
   <div class="card">
     <h2>How to use</h2>
-    <p>Prepare your CSV using the template below. <strong>Row 2 is reserved for quiz title, description, and quiz settings only. Questions start at row 3.</strong> The TXT we generate includes only content rows, never the CSV header.</p>
+    <p>Prepare your CSV using the template below. <strong>Questions start at row 2 (no header row needed for quiz settings).</strong> The TXT we generate includes only content rows.</p>
     <div class="buttonrow">
       <button id="downloadTemplate">Download Template CSV</button>
     </div><p></p>
     <div class="notice">
-      <strong>Structure:</strong> Row 1 = Headers | Row 2 = Quiz Info & Settings | Row 3+ = Questions<br>
-      <strong>Quiz Settings:</strong> ShuffleAnswers, ShowCorrectAnswers, OneQuestionAtATime, and CantGoBack are all set with "true" or "false" values in row 2.<br>
+      <strong>Structure:</strong> Row 1 = Headers | Row 2+ = Questions<br>
       The QuestionNumber column is for your reference only and won't appear in the output.<br>
-      After generating the plain text, convert it to QTI format and import into Canvas.<br><br>
-      <strong>⚠️ Important Converter Requirements:</strong><br>
-      • Point values MUST be integers (whole numbers only). The text2qti converter does not support decimal point values even though Canvas itself does.<br>
+      After generating the plain text, use the Canvas Exam Converter to process it for Canvas import.<br><br>
+      <strong>⚠️ Important Requirements:</strong><br>
       • Questions in the same group must all have the same point value when using GroupPointsPerQuestion.
     </div>
   </div>
@@ -71,42 +69,22 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
   <div class="card">
     <h2>CSV columns (in order)</h2>
     <div class="kv">
-      <div>QuizTitle (A)</div><div>Title of the quiz (use on row 2 only)</div>
-      <div>QuizDescription (B)</div><div>Description of the quiz (use on row 2 only)</div>
-      <div>ShuffleAnswers (C)</div><div>true or false - randomize answer order (row 2 only)</div>
-      <div>ShowCorrectAnswers (D)</div><div>true or false - show correct answers after submission (row 2 only)</div>
-      <div>OneQuestionAtATime (E)</div><div>true or false - only show one question at a time (row 2 only)</div>
-      <div>CantGoBack (F)</div><div>true or false - don't allow going back when one-at-a-time (row 2 only)</div>
-      <div>QuestionNumber (G)</div><div>For your reference only - not included in output (pre-numbered)</div>
-      <div>Group (H)</div><div>Group name for organizing questions. Leave blank for no grouping.</div>
-      <div>GroupPick (I)</div><div>Number of questions to randomly select from this group (first row of group only)</div>
-      <div>GroupPointsPerQuestion (J)</div><div>Points per question when randomly selected (first row of group only)</div>
-      <div>Type (K)</div><div>MC, MR, TF, NUM, SA, ESSAY, FILE, TEXT</div>
-      <div>Title (L)</div><div>Optional question or TEXT title</div>
-      <div>Points (M)</div><div>Positive integer (whole numbers only - no decimals); ignored for TEXT and when GroupPointsPerQuestion is used</div>
-      <div>Body (N)</div><div>Question prompt or TEXT content</div>
-      <div>Answer1..Answer5 (O-S)</div><div>MC/MR/TF choice texts; SA acceptable answers; NUM rule in Answer1</div>
-      <div>Correct (T)</div><div>MC/TF single number 1–5; MR comma list like 1,3</div>
-      <div>GeneralFeedback (U)</div><div>Shown for all answers when supported</div>
-      <div>CorrectFeedback (V)</div><div>Shown on correct</div>
-      <div>IncorrectFeedback (W)</div><div>Shown on incorrect</div>
-      <div>Choice1Feedback..Choice5Feedback (X-AB)</div><div>Optional per-choice feedback</div>
-      <div>TextTitle (AC)</div><div>For Type=TEXT</div>
-      <div>TextContent (AD)</div><div>For Type=TEXT</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Quiz Settings (text2qti supported)</h2>
-    <p>These quiz-level settings can be configured in row 2 of your CSV (columns C-F). All are optional and use "true" or "false" values.</p>
-    <div class="grid2">
-      <div class="panel"><b>Shuffle Answers</b><p>Randomizes the order of answer choices for each question. Useful for preventing cheating when students compare answers.</p></div>
-      <div class="panel"><b>Show Correct Answers</b><p>Displays correct answers to students after quiz submission. Consider your pedagogical goals when setting this.</p></div>
-      <div class="panel"><b>One Question At A Time</b><p>Shows only one question per page instead of all questions at once. Can help students focus.</p></div>
-      <div class="panel"><b>Can't Go Back</b><p>When using one-question-at-a-time, prevents students from returning to previous questions. Use with caution.</p></div>
-    </div><p></p>
-    <div class="notice">
-      <strong>Note:</strong> Other Canvas settings like time limits, access codes, and multiple attempts must be configured directly in Canvas after importing the QTI file. text2qti doesn't support these settings.
+      <div>QuestionNumber (A)</div><div>For your reference only - not included in output (pre-numbered)</div>
+      <div>Group (B)</div><div>Group name for organizing questions. Leave blank for no grouping.</div>
+      <div>GroupPick (C)</div><div>Number of questions to randomly select from this group (first row of group only)</div>
+      <div>GroupPointsPerQuestion (D)</div><div>Points per question when randomly selected (first row of group only)</div>
+      <div>Type (E)</div><div>MC, MR, TF, NUM, SA, ESSAY, FILE, TEXT</div>
+      <div>Title (F)</div><div>Optional question or TEXT title</div>
+      <div>Points (G)</div><div>Positive integer (whole numbers only - no decimals); ignored for TEXT and when GroupPointsPerQuestion is used</div>
+      <div>Body (H)</div><div>Question prompt or TEXT content</div>
+      <div>Answer1..Answer5 (I-M)</div><div>MC/MR/TF choice texts; SA acceptable answers; NUM rule in Answer1</div>
+      <div>Correct (N)</div><div>MC/TF single number 1–5; MR comma list like 1,3</div>
+      <div>GeneralFeedback (O)</div><div>Shown for all answers when supported</div>
+      <div>CorrectFeedback (P)</div><div>Shown on correct</div>
+      <div>IncorrectFeedback (Q)</div><div>Shown on incorrect</div>
+      <div>Choice1Feedback..Choice5Feedback (R-V)</div><div>Optional per-choice feedback</div>
+      <div>TextTitle (W)</div><div>For Type=TEXT</div>
+      <div>TextContent (X)</div><div>For Type=TEXT</div>
     </div>
   </div>
 
@@ -120,125 +98,20 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
     <div class="group-info">
       <strong>✅ How to Use Groups:</strong><br>
       <ul style="margin: 5px 0; padding-left: 20px;">
-        <li><b>To group questions:</b> Enter the same group name in column H for all questions you want together</li>
-        <li><b>To leave ungrouped:</b> Simply leave column H blank - the question stands alone</li>
+        <li><b>To group questions:</b> Enter the same group name in column B for all questions you want together</li>
+        <li><b>To leave ungrouped:</b> Simply leave column B blank - the question stands alone</li>
         <li><b>Group names:</b> Use any name like "Chapter 1", "Atoms", "Lab Safety", etc.</li>
       </ul>
     </div>
     
     <div class="group-info">
       <strong>🎲 Random Selection (Optional):</strong><br>
-      Want Canvas to randomly pick only some questions from a group? Use columns I and J on the <b>first row of each new group</b>:
+      Want Canvas to randomly pick only some questions from a group? Use columns C and D on the <b>first row of each new group</b>:
       <ul style="margin: 5px 0; padding-left: 20px;">
-        <li><b>Column I (GroupPick):</b> How many questions to randomly select</li>
-        <li><b>Column J (GroupPointsPerQuestion):</b> Points each selected question is worth</li>
+        <li><b>Column C (GroupPick):</b> How many questions to randomly select</li>
+        <li><b>Column D (GroupPointsPerQuestion):</b> Points each selected question is worth</li>
         <li><b>Important:</b> Only fill these in on the first question of a new group, leave blank for other rows</li>
       </ul>
-    </div>
-    
-    <div class="example-box">
-      <strong>📋 Examples:</strong><br><br>
-      <b>Scenario 1: Random subset with uniform points</b><br>
-      • Group="Chapter 1", GroupPick=2, GroupPointsPerQuestion=5<br>
-      • You have 5 questions in Chapter 1<br>
-      → <em>Canvas randomly picks 2 of the 5 questions, each worth 5 points (10 points total)</em><br><br>
-      
-      <b>Scenario 2: All questions with individual points</b><br>
-      • Group="Chapter 2" (leave GroupPick and GroupPointsPerQuestion blank)<br>
-      • Questions have Points=2, 3, 5, etc.<br>
-      → <em>All Chapter 2 questions appear, each worth their individual point values</em><br><br>
-      
-      <b>Scenario 3: No grouping</b><br>
-      • Leave Group column blank<br>
-      → <em>Question appears by itself, not part of any group</em>
-    </div>
-    
-    <div class="example-box" style="overflow-x: auto;">
-      <strong>📊 Visual CSV Example (showing questions from row 3 onwards) - Notice GroupPick & GroupPointsPerQuestion only on FIRST row of each group:</strong><br><br>
-      <table style="border-collapse: collapse; font-size: 12px; width: 100%; min-width: 600px;">
-        <thead>
-          <tr style="background: #f0f0f0;">
-            <th style="border: 1px solid #ddd; padding: 4px;">QuestionNumber</th>
-            <th style="border: 1px solid #ddd; padding: 4px;">Group</th>
-            <th style="border: 1px solid #ddd; padding: 4px;">GroupPick</th>
-            <th style="border: 1px solid #ddd; padding: 4px;">GroupPointsPerQuestion</th>
-            <th style="border: 1px solid #ddd; padding: 4px;">Type</th>
-            <th style="border: 1px solid #ddd; padding: 4px;">Body</th>
-            <th style="border: 1px solid #ddd; padding: 4px;">...</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr style="background: #e8f4fd;">
-            <td style="border: 1px solid #ddd; padding: 4px;">1</td>
-            <td style="border: 1px solid #ddd; padding: 4px;"><b>Chapter 1</b></td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #ffffcc;"><b>2</b></td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #ffffcc;"><b>3</b></td>
-            <td style="border: 1px solid #ddd; padding: 4px;">MC</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">What is H₂O?</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 4px;">2</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">Chapter 1</td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
-            <td style="border: 1px solid #ddd; padding: 4px;">TF</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">Water boils at 100°C</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 4px;">3</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">Chapter 1</td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
-            <td style="border: 1px solid #ddd; padding: 4px;">MC</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">pH of pure water?</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
-          </tr>
-          <tr style="background: #ffe8e8;">
-            <td style="border: 1px solid #ddd; padding: 4px;">4</td>
-            <td style="border: 1px solid #ddd; padding: 4px;"><b>Chapter 2</b></td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
-            <td style="border: 1px solid #ddd; padding: 4px;">MC</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">What is an atom?</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 4px;">5</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">Chapter 2</td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
-            <td style="border: 1px solid #ddd; padding: 4px;">NUM</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">Atomic number of Carbon?</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
-          </tr>
-          <tr style="background: #f0f0f0;">
-            <td style="border: 1px solid #ddd; padding: 4px;">6</td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
-            <td style="border: 1px solid #ddd; padding: 4px; background: #f9f9f9;"></td>
-            <td style="border: 1px solid #ddd; padding: 4px;">TF</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">All acids are dangerous</td>
-            <td style="border: 1px solid #ddd; padding: 4px;">...</td>
-          </tr>
-        </tbody>
-      </table>
-      <br>
-      <div style="font-size: 12px;">
-        <b>Note:</b> Row 2 (not shown) contains only QuizTitle, QuizDescription, and quiz settings. Questions start at Row 3.<br>
-        <span style="background: #e8f4fd; padding: 2px 6px;">Blue rows</span> = First row of Chapter 1 (picks 2 random questions, 3 pts each)<br>
-        <span style="background: #ffe8e8; padding: 2px 6px;">Pink row</span> = First row of Chapter 2 (all questions included, individual points)<br>
-        <span style="background: #f0f0f0; padding: 2px 6px;">Gray row</span> = No group (standalone question)<br>
-        <span style="background: #ffffcc; padding: 2px 6px;">Yellow cells</span> = GroupPick/GroupPointsPerQuestion ONLY on first row of group!
-      </div>
-    </div>
-    
-    <div class="notice">
-      <strong>💡 Tips:</strong> 
-      • GroupPick is great for creating question pools where students get different questions<br>
-      • When using GroupPointsPerQuestion, individual Points values are ignored for that group<br>
-      • You can mix grouped and ungrouped questions in the same quiz
     </div>
   </div>
 
@@ -249,7 +122,7 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
       <div class="panel"><b>MR</b><p>Multiple correct choices. Put choices in Answer1..Answer5. Put a comma list in Correct, for example 1,3.</p></div>
       <div class="panel"><b>TF</b><p>Use Answer1=True and Answer2=False or your own labels. Put Correct=1 for True or 2 for False.</p></div>
       <div class="panel"><b>NUM</b><p>Put the rule in Answer1. Examples: 5 for exact; [1.2598, 1.2600] for range; 1.4142 +- 0.0001 or 100 +- 5% for margin.</p></div>
-      <div class="panel"><b>SA</b><p>Put acceptable exact answers in Answer1..Answer5. Case sensitivity follows Canvas/text2qti behavior.</p></div>
+      <div class="panel"><b>SA</b><p>Put acceptable exact answers in Answer1..Answer5. Case sensitivity follows Canvas behavior.</p></div>
       <div class="panel"><b>ESSAY</b><p>No answers needed. The generator adds the essay marker automatically.</p></div>
       <div class="panel"><b>FILE</b><p>No answers needed. The generator adds the file-upload marker automatically.</p></div>
       <div class="panel"><b>TEXT</b><p>Non-question content. Use TextTitle and TextContent. No points.</p></div>
@@ -266,7 +139,7 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
         <button id="clearBtn" class="gray">Clear</button>
       </div>
     </div>
-    <textarea id="output" placeholder="Your text2qti-compatible plain text will appear here. The header row is never included."></textarea>
+    <textarea id="output" placeholder="Your Canvas-compatible plain text will appear here. The header row is never included."></textarea>
     <div class="buttonrow" style="margin-top:10px;">
       <button id="copyBtn">Copy To Clipboard</button>
       <button id="downloadTxtBtn" class="secondary">Download .txt</button>
@@ -274,11 +147,11 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
   </div>
 
   <div class="card only-bottom">
-    <button id="goToConverterBottom" class="secondary">Continue to text2qti Converter</button>
+    <button id="goToConverterBottom" class="secondary">Continue to Canvas Exam Converter</button>
   </div>
 </div>
 
-<footer>CSV → text2qti Generator • Works offline in your browser</footer>
+<footer>CSV → Canvas Generator • Works offline in your browser</footer>
 
 <script>
 function parseCSV(text) {
@@ -348,29 +221,10 @@ function buildTextFromRows(rows) {
   var out = [];
   var currentGroup = "";
   var inGroup = false;
+  var questionNumber = 0;
   
-  // Handle quiz title, description, and settings from row 2
-  if (rows.length > 1) {
-    var titleRow = rows[1];
-    var qtitle = safe(titleRow[col("QuizTitle")]);
-    var qdesc = safe(titleRow[col("QuizDescription")]);
-    var shuffleAnswers = safe(titleRow[col("ShuffleAnswers")]);
-    var showCorrectAnswers = safe(titleRow[col("ShowCorrectAnswers")]);
-    var oneQuestionAtATime = safe(titleRow[col("OneQuestionAtATime")]);
-    var cantGoBack = safe(titleRow[col("CantGoBack")]);
-    
-    if (has(qtitle)) out.push("Quiz title: " + qtitle);
-    if (has(qdesc)) out.push("Quiz description: " + qdesc);
-    
-    // Add quiz settings if specified
-    if (has(shuffleAnswers)) out.push("shuffle answers: " + shuffleAnswers.toLowerCase());
-    if (has(showCorrectAnswers)) out.push("show correct answers: " + showCorrectAnswers.toLowerCase());
-    if (has(oneQuestionAtATime)) out.push("one question at a time: " + oneQuestionAtATime.toLowerCase());
-    if (has(cantGoBack)) out.push("can't go back: " + cantGoBack.toLowerCase());
-  }
-  
-  // Process questions starting from row 3
-  for (var r = 2; r < rows.length; r++) {
+  // Process questions starting from row 2
+  for (var r = 1; r < rows.length; r++) {
     var row = rows[r];
     if (!row || row.length === 0) continue;
     
@@ -386,6 +240,7 @@ function buildTextFromRows(rows) {
       // Close previous group if one was open
       if (inGroup) {
         out.push("END_GROUP");
+        out.push("");
       }
       
       // Start new group
@@ -401,20 +256,25 @@ function buildTextFromRows(rows) {
     } else if (!has(group) && inGroup) {
       // End group when moving to ungrouped question
       out.push("END_GROUP");
+      out.push("");
       currentGroup = "";
       inGroup = false;
+    }
+    
+    // Increment question number for non-TEXT types
+    if (type !== "TEXT") {
+      questionNumber++;
     }
     
     if (type === "TEXT") {
       var tTitle = safe(row[col("TextTitle")]);
       var tBody = safe(row[col("TextContent")]);
-      if (has(tTitle)) out.push("Text title:  " + tTitle);
-      if (has(tBody)) out.push("Text:  " + tBody);
+      if (has(tTitle)) out.push("Text title: " + tTitle);
+      if (has(tBody)) out.push("Text: " + tBody);
+      out.push("");
       continue;
     }
     
-    var title = safe(row[col("Title")]);
-    var points = safe(row[col("Points")]);
     var body = safe(row[col("Body")]);
     var a1 = safe(row[col("Answer1")]);
     var a2 = safe(row[col("Answer2")]);
@@ -431,13 +291,10 @@ function buildTextFromRows(rows) {
     var ch4fb = safe(row[col("Choice4Feedback")]);
     var ch5fb = safe(row[col("Choice5Feedback")]);
     
-    if (has(title)) out.push("Title: " + title);
-    if (has(points)) out.push("Points: " + points);
-    if (has(body)) out.push("1.  " + body);
-    
-    if (has(gfb)) out.push("... " + gfb);
-    if (has(cfb)) out.push("+   " + cfb);
-    if (has(ifb)) out.push("-   " + ifb);
+    // Add question with number
+    if (has(body)) {
+      out.push(questionNumber + ". " + body);
+    }
     
     if (type === "MC") {
       var choices = [a1, a2, a3, a4, a5];
@@ -447,10 +304,11 @@ function buildTextFromRows(rows) {
         if (!has(choices[i])) continue;
         var letter = String.fromCharCode(97 + i);
         var mark = (i + 1 === correctIndex) ? "*" : "";
-        var line = mark + letter + ")  " + choices[i];
+        var line = mark + letter + ") " + choices[i];
         out.push(line);
         if (has(chFB[i])) out.push("... " + chFB[i]);
       }
+      out.push("");
       continue;
     }
     
@@ -461,9 +319,10 @@ function buildTextFromRows(rows) {
       for (var j = 0; j < 2; j++) {
         var ltr = String.fromCharCode(97 + j);
         var marktf = (j + 1 === tfCorrectIndex) ? "*" : "";
-        out.push(marktf + ltr + ")  " + tfChoices[j]);
+        out.push(marktf + ltr + ") " + tfChoices[j]);
         if (has(tfFB[j])) out.push("... " + tfFB[j]);
       }
+      out.push("");
       continue;
     }
     
@@ -484,29 +343,34 @@ function buildTextFromRows(rows) {
         out.push(markmr + " " + mrChoices[m]);
         if (has(mrfb[m])) out.push("... " + mrfb[m]);
       }
+      out.push("");
       continue;
     }
     
     if (type === "NUM") {
-      if (has(a1)) out.push("=   " + a1);
+      if (has(a1)) out.push("= " + a1);
+      out.push("");
       continue;
     }
     
     if (type === "SA") {
       var sa = [a1, a2, a3, a4, a5];
       for (var s = 0; s < sa.length; s++) {
-        if (has(sa[s])) out.push("*   " + sa[s]);
+        if (has(sa[s])) out.push("* " + sa[s]);
       }
+      out.push("");
       continue;
     }
     
     if (type === "ESSAY") {
-      out.push("____");
+      out.push("####");
+      out.push("");
       continue;
     }
     
     if (type === "FILE") {
       out.push("^^^^");
+      out.push("");
       continue;
     }
   }
@@ -533,7 +397,6 @@ function downloadBlob(filename, text, mime) {
 
 function generateTemplateCSV() {
   var headers = [
-    "QuizTitle","QuizDescription","ShuffleAnswers","ShowCorrectAnswers","OneQuestionAtATime","CantGoBack",
     "QuestionNumber","Group","GroupPick","GroupPointsPerQuestion",
     "Type","Title","Points","Body",
     "Answer1","Answer2","Answer3","Answer4","Answer5",
@@ -543,20 +406,8 @@ function generateTemplateCSV() {
   ];
   var rows = [];
   
-  // Row 2 - Quiz title, description, and settings only
+  // TEXT instructions, Chapter 1 group with random selection
   rows.push([
-    "My Chemistry Quiz","This quiz covers chapters 1-3 with random selection and grouping.","true","false","false","false",
-    "","","","",
-    "","","","",
-    "","","","","",
-    "","","","",
-    "","","","","",
-    "",""
-  ]);
-  
-  // Row 3 - First question (TEXT instructions, Chapter 1 group with random selection)
-  rows.push([
-    "","","","","","",
     "1","Chapter 1","2","3",
     "TEXT","Read First","","",
     "","","","","",
@@ -567,7 +418,6 @@ function generateTemplateCSV() {
   
   // Chapter 1 questions (will pick 2 of these 3 randomly, each worth 3 points)
   rows.push([
-    "","","","","","",
     "2","Chapter 1","","",
     "MC","Basic Addition","","What is 2 + 3?",
     "6","1","5","10","",
@@ -577,7 +427,6 @@ function generateTemplateCSV() {
   ]);
   
   rows.push([
-    "","","","","","",
     "3","Chapter 1","","",
     "TF","State of Water","","Water is liquid at room temperature.",
     "True","False","","","",
@@ -587,7 +436,6 @@ function generateTemplateCSV() {
   ]);
   
   rows.push([
-    "","","","","","",
     "4","Chapter 1","","",
     "MC","Subtraction","","What is 10 - 7?",
     "2","3","4","5","",
@@ -598,7 +446,6 @@ function generateTemplateCSV() {
   
   // Chapter 2 group - all questions included with individual points
   rows.push([
-    "","","","","","",
     "5","Chapter 2","","",
     "MR","Noble Gases","3","Which of the following are noble gases?",
     "Oxygen","Helium","Neon","Nitrogen","Argon",
@@ -608,7 +455,6 @@ function generateTemplateCSV() {
   ]);
   
   rows.push([
-    "","","","","","",
     "6","Chapter 2","","",
     "NUM","Avogadro's Number","3","What is Avogadro's number (×10²³)?",
     "6.022 +- 0.001","","","","",
@@ -619,7 +465,6 @@ function generateTemplateCSV() {
   
   // Lab Questions group - pick 1 random question worth 5 points
   rows.push([
-    "","","","","","",
     "7","Lab Questions","1","5",
     "SA","Lab Safety Equipment","","What protective equipment covers your eyes in the lab?",
     "goggles","safety goggles","safety glasses","protective goggles","eye protection",
@@ -629,7 +474,6 @@ function generateTemplateCSV() {
   ]);
   
   rows.push([
-    "","","","","","",
     "8","Lab Questions","","",
     "ESSAY","Lab Safety Essay","","Write an essay about lab safety best practices.",
     "","","","","",
@@ -639,7 +483,6 @@ function generateTemplateCSV() {
   ]);
   
   rows.push([
-    "","","","","","",
     "9","Lab Questions","","",
     "FILE","Upload Lab Report","","Upload your completed lab report as a PDF.",
     "","","","","",
@@ -648,10 +491,9 @@ function generateTemplateCSV() {
     "",""
   ]);
   
-  // Questions without a group (standalone)
+  // Question without a group (standalone)
   rows.push([
-    "","","","","","",
-    "10","Lab Questions","","",
+    "10","","","",
     "TF","Chemical Safety","1","All chemicals should be treated as potentially hazardous.",
     "True","False","","","",
     "1","Safety first!","Correct!","Always treat chemicals with respect.",
@@ -722,7 +564,7 @@ downloadTemplate.addEventListener("click", function(){
 });
 
 document.getElementById("goToConverterBottom").addEventListener("click", function(){
-  window.open("http://ec2-34-207-154-191.compute-1.amazonaws.com", "_blank");
+  window.open("https://site.nyit.edu/its/canvas_exam_converter", "_blank");
 });
 </script>
 </body>
