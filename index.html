@@ -298,11 +298,25 @@ function buildTextFromRows(rows) {
     
     if (type === "MC") {
       var choices = [a1, a2, a3, a4, a5];
-      var correctIndex = parseInt(cAns, 10);
+      var correctIndex;
+      
+      // Handle both letter (A, B, C, D, E) and number (1, 2, 3, 4, 5) formats
+      if (cAns && isNaN(cAns)) {
+        // It's a letter, convert to number (A=1, B=2, C=3, D=4, E=5)
+        var letter = cAns.toUpperCase().trim();
+        correctIndex = letter.charCodeAt(0) - 64; // A=65, so A=1, B=2, etc.
+      } else {
+        // It's already a number
+        correctIndex = parseInt(cAns, 10);
+      }
+      
       var chFB = [ch1fb, ch2fb, ch3fb, ch4fb, ch5fb];
+      
       for (var i = 0; i < choices.length; i++) {
         if (!has(choices[i])) continue;
-        var mark = (i + 1 === correctIndex) ? "[*]" : "[ ]";
+        // i+1 because choices are 1-indexed in the CSV (1,2,3,4,5)
+        var isCorrect = (i + 1) === correctIndex;
+        var mark = isCorrect ? "[*]" : "[ ]";
         var line = mark + " " + choices[i];
         out.push(line);
         if (has(chFB[i])) out.push("... " + chFB[i]);
