@@ -118,8 +118,8 @@ footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
   <div class="card">
     <h2>Question type instructions</h2>
     <div class="grid2">
-      <div class="panel"><b>MC</b><p>Single correct choice. Put choices in Answer1..Answer5. Put the correct index in Correct, for example 3.</p></div>
-      <div class="panel"><b>MR</b><p>Multiple correct choices. Put choices in Answer1..Answer5. Put a comma list in Correct, for example 1,3.</p></div>
+      <div class="panel"><b>MC</b><p>Single correct choice. Put choices in Answer1..Answer5. Put the correct index in Correct, for example 3. Uses bracket format: [ ] for incorrect, [*] for correct.</p></div>
+      <div class="panel"><b>MR</b><p>Multiple correct choices. Put choices in Answer1..Answer5. Put a comma list in Correct, for example 1,3. Uses bracket format: [ ] for incorrect, [*] for correct.</p></div>
       <div class="panel"><b>TF</b><p>Use Answer1=True and Answer2=False or your own labels. Put Correct=1 for True or 2 for False.</p></div>
       <div class="panel"><b>NUM</b><p>Put the rule in Answer1. Examples: 5 for exact; [1.2598, 1.2600] for range; 1.4142 +- 0.0001 or 100 +- 5% for margin.</p></div>
       <div class="panel"><b>SA</b><p>Put acceptable exact answers in Answer1..Answer5. Case sensitivity follows Canvas behavior.</p></div>
@@ -302,9 +302,8 @@ function buildTextFromRows(rows) {
       var chFB = [ch1fb, ch2fb, ch3fb, ch4fb, ch5fb];
       for (var i = 0; i < choices.length; i++) {
         if (!has(choices[i])) continue;
-        var letter = String.fromCharCode(97 + i);
-        var mark = (i + 1 === correctIndex) ? "*" : "";
-        var line = mark + letter + ") " + choices[i];
+        var mark = (i + 1 === correctIndex) ? "[*]" : "[ ]";
+        var line = mark + " " + choices[i];
         out.push(line);
         if (has(chFB[i])) out.push("... " + chFB[i]);
       }
