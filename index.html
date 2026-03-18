@@ -47,7 +47,7 @@ textarea{min-height:70px;resize:vertical;line-height:1.5}
 .q-num{background:#201D52;color:#fff;border-radius:7px;padding:3px 9px;font-size:12px;font-weight:700;font-family:'DM Mono',monospace;min-width:36px;text-align:center}
 .type-pill{border-radius:7px;padding:3px 9px;font-size:11px;font-weight:700;color:#fff;font-family:'DM Mono',monospace}
 .tp-MC,.tp-TF{background:#6465F1}.tp-MR{background:#8F37EB}.tp-NUM{background:#059669}
-.tp-SA{background:#d97706}.tp-ESSAY,.tp-FILE{background:#64748b}
+.tp-SA{background:#d97706}.tp-FIB{background:#0891b2}.tp-ESSAY,.tp-FILE{background:#64748b}
 .q-preview{font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#444}
 .q-actions{display:flex;gap:7px;margin-left:auto}
 .q-edit-body{display:none;margin-top:14px;border-top:1.5px solid #e8e8f5;padding-top:14px}
@@ -108,6 +108,16 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
       <p id="chosenFileName" class="fname"></p>
     </div>
     <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown">
+    <div style="margin-bottom:14px">
+      <label style="font-weight:700;font-size:13px;color:#201D52;display:block;margin-bottom:8px">Extraction Preferences</label>
+      <div class="check-group" style="background:#f4f4fc;border-radius:10px;padding:12px 14px;border:1.5px solid #e0e0f0">
+        <label style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input type="checkbox" id="allowSA" checked style="width:18px;height:18px;accent-color:#6465F1;margin:0">
+          Allow Short Answer questions
+        </label>
+        <span style="font-size:12px;color:#666;margin-left:28px;display:block;margin-top:2px">Uncheck to force all open-ended questions into MC, TF, or fill-in-the-blank instead</span>
+      </div>
+    </div>
     <div class="btnrow">
       <button class="btn btn-indigo" id="extractBtn">🤖 Extract Questions with AI</button>
       <button class="btn btn-gray" id="clearBtn">Clear</button>
@@ -168,12 +178,14 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
 // ─── State ────────────────────────────────────────────────────────────────────
 let selectedFile = null;
 let questions = [];
 let nextId = 1;
-const TYPES = ['MC','MR','TF','NUM','SA','ESSAY','FILE'];
+const TYPES = ['MC','MR','TF','NUM','SA','FIB','ESSAY','FILE'];
+let extractedImages = {}; // { key: { data: 'base64', mime: 'image/png', page?: N } }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 const show = id => document.getElementById(id).classList.remove('hidden');
@@ -229,41 +241,124 @@ document.getElementById('clearBtn').addEventListener('click', () => {
 // ─── File Reading ─────────────────────────────────────────────────────────────
 async function readFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
-  if (ext === 'pdf') {
-    return new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = e => {
-        const bytes = new Uint8Array(e.target.result);
-        let b64 = '';
-        const chunk = 8192;
-        for (let i = 0; i < bytes.length; i += chunk) {
-          b64 += String.fromCharCode(...bytes.subarray(i, i + chunk));
-        }
-        res({ kind: 'pdf', data: btoa(b64) });
-      };
-      r.onerror = rej;
-      r.readAsArrayBuffer(file);
-    });
-  } else if (ext === 'docx') {
-    return new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = async e => {
-        try {
-          const result = await mammoth.extractRawText({ arrayBuffer: e.target.result });
-          res({ kind: 'text', data: result.value });
-        } catch(err) { rej(err); }
-      };
-      r.onerror = rej;
-      r.readAsArrayBuffer(file);
-    });
-  } else {
-    return new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = e => res({ kind: 'text', data: e.target.result });
-      r.onerror = rej;
-      r.readAsText(file);
-    });
+  if (ext === 'pdf')  return readPDF(file);
+  if (ext === 'docx') return readDOCX(file);
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res({ kind: 'text', data: e.target.result, images: {} });
+    r.onerror = rej;
+    r.readAsText(file);
+  });
+}
+
+async function readDOCX(file) {
+  const ab = await file.arrayBuffer();
+
+  // Extract text via mammoth
+  const mammothResult = await mammoth.extractRawText({ arrayBuffer: ab.slice(0) });
+  let text = mammothResult.value;
+
+  // Extract images from word/media/ using JSZip
+  const images = {};
+  try {
+    const zip        = await JSZip.loadAsync(ab);
+    const mediaFiles = Object.keys(zip.files)
+      .filter(n => n.startsWith('word/media/') && !zip.files[n].dir)
+      .sort();
+    const mimeMap = { png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif', bmp:'image/bmp', tiff:'image/tiff', svg:'image/svg+xml' };
+    for (let i = 0; i < mediaFiles.length; i++) {
+      const fname = mediaFiles[i];
+      const ext2  = fname.split('.').pop().toLowerCase();
+      const mime  = mimeMap[ext2] || 'image/png';
+      const data  = await zip.files[fname].async('base64');
+      const key   = 'img_' + String(i + 1).padStart(3, '0');
+      images[key] = { data, mime, originalName: fname.split('/').pop() };
+    }
+  } catch(e) { console.warn('DOCX image extraction:', e); }
+
+  const imgCount = Object.keys(images).length;
+  if (imgCount > 0) {
+    text = '[DOCUMENT HAS ' + imgCount + ' EMBEDDED IMAGE(S): ' + Object.keys(images).join(', ') + ']\n'
+         + 'When a question has an associated image, set image_ref to the matching key (e.g. "img_001").\n\n'
+         + text;
   }
+  return { kind: 'text', data: text, images };
+}
+
+async function readPDF(file) {
+  const ab = await file.arrayBuffer();
+
+  // Build base64 for Claude native PDF vision
+  const bytes = new Uint8Array(ab);
+  let b64 = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    b64 += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  const pdfBase64 = btoa(b64);
+
+  // Extract images page-by-page with PDF.js
+  const images = {};
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdfDoc   = await pdfjsLib.getDocument({ data: ab.slice(0) }).promise;
+    const numPages = pdfDoc.numPages;
+    const imgOps   = [
+      pdfjsLib.OPS.paintImageXObject,
+      pdfjsLib.OPS.paintJpegXObject,
+      pdfjsLib.OPS.paintImageXObjectRepeat,
+      pdfjsLib.OPS.paintInlineImageXObject
+    ];
+
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page   = await pdfDoc.getPage(pageNum);
+      const opList = await page.getOperatorList();
+
+      const seen = new Set();
+      for (let i = 0; i < opList.fnArray.length; i++) {
+        if (!imgOps.includes(opList.fnArray[i])) continue;
+        const imgName = opList.argsArray[i][0];
+        if (!imgName || seen.has(imgName)) continue;
+        seen.add(imgName);
+
+        try {
+          const imgData = await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('timeout')), 3000);
+            page.objs.get(imgName, img => { clearTimeout(timeout); img ? resolve(img) : reject(new Error('null')); });
+          });
+
+          if (imgData && imgData.data && imgData.width > 10 && imgData.height > 10) {
+            const canvas = document.createElement('canvas');
+            canvas.width  = imgData.width;
+            canvas.height = imgData.height;
+            const ctx  = canvas.getContext('2d');
+            const imd  = ctx.createImageData(imgData.width, imgData.height);
+            // PDF.js may give RGB or RGBA
+            if (imgData.data.length === imgData.width * imgData.height * 3) {
+              // RGB -> RGBA
+              const rgba = new Uint8ClampedArray(imgData.width * imgData.height * 4);
+              for (let p = 0; p < imgData.width * imgData.height; p++) {
+                rgba[p*4]   = imgData.data[p*3];
+                rgba[p*4+1] = imgData.data[p*3+1];
+                rgba[p*4+2] = imgData.data[p*3+2];
+                rgba[p*4+3] = 255;
+              }
+              imd.data.set(rgba);
+            } else {
+              imd.data.set(imgData.data);
+            }
+            ctx.putImageData(imd, 0, 0);
+            const key   = 'p' + pageNum + '_' + imgName.replace(/[^a-z0-9]/gi,'');
+            const pngB64 = canvas.toDataURL('image/png').split(',')[1];
+            images[key] = { data: pngB64, mime: 'image/png', page: pageNum };
+          }
+        } catch(e) { /* skip unextractable images */ }
+      }
+    }
+  } catch(e) { console.warn('PDF image extraction partial failure:', e); }
+
+  return { kind: 'pdf', data: pdfBase64, images };
 }
 
 // ─── AI Extraction ────────────────────────────────────────────────────────────
@@ -297,10 +392,18 @@ async function doExtract() {
   setStatus('<span class="spinner"></span> Reading document…', 'loading');
 
   let content;
-  try { content = await readFile(selectedFile); }
+  try {
+    setStatus('<span class="spinner"></span> Reading document and extracting images…', 'loading');
+    content = await readFile(selectedFile);
+  }
   catch(err) { setStatus('⚠ Could not read file: ' + err.message, 'error'); return; }
 
   setStatus('<span class="spinner"></span> Sending to Claude — extracting questions…', 'loading');
+
+  const allowSA = document.getElementById('allowSA').checked;
+  const saRule  = allowSA
+    ? 'Short Answer (SA) questions are allowed.'
+    : 'Short Answer (SA) free-text questions are NOT allowed. Convert them instead into: MC (add plausible distractors), TF (reframe as true/false), MR (select all that apply), or FIB (fill-in-multiple-blanks with dropdown choices) — whichever best fits the question. Be creative but do not change the chemistry concept being tested. NEVER output type SA.';
 
   const SYS = `You are a quiz extraction assistant. Extract every question from the provided document and suggest correct answers using your chemistry and science knowledge.
 Return ONLY valid JSON — no markdown fences, no explanation, nothing else.
@@ -317,6 +420,8 @@ Schema:
       "answers": ["Choice A", "Choice B", "Choice C", "Choice D"],
       "correct": [2],
       "suggested_answer": "",
+      "image_ref": "",
+      "fib_blanks": {},
       "feedback": { "general": "", "correct": "", "incorrect": "" }
     }
   ]
@@ -338,14 +443,27 @@ Rules for each type — always fill "correct" and "suggested_answer" to the best
   • suggested_answer = "True" or "False"
 
 - NUM = numerical answer.
-  • answers = [a tight bounding range that perfectly brackets the exact correct answer, formatted as "[min, max]" — for example if the answer is 6.022e23 use "[6.020e23, 6.024e23]", if the answer is 273.15 use "[273.14, 273.16]". Make the range just wide enough to accept rounding to the expected sig figs.]
+  • answers = [a tight bounding range that perfectly brackets the exact correct answer, formatted as "[min, max]" — use E-notation for scientific notation (e.g. if the answer is 6.022×10²³ use "[6.020E23, 6.024E23]", if the answer is 1.5×10⁻¹⁰ use "[1.499E-10, 1.501E-10]", if the answer is 273.15 use "[273.14, 273.16]"). Students will type answers like 6.02E23, so the range must match that format. Make the range just wide enough to accept rounding to the expected sig figs.]
   • correct = [] (leave empty, the range in answers[0] is the answer)
-  • suggested_answer = the exact correct numerical value with units (e.g. "6.022 × 10²³ mol⁻¹")
+  • suggested_answer = the exact correct numerical value with units, using Unicode superscripts for display (e.g. "6.022 × 10²³ mol⁻¹")
 
-- SA  = fill-in-the-blank.
+- SA  = single fill-in-the-blank (student types one free-text answer).
   • answers = list of acceptable answer strings (include common variations, abbreviations, and alternate spellings)
   • correct = [] (leave empty)
   • suggested_answer = the primary canonical correct answer
+
+- FIB = fill-in-MULTIPLE-blanks (student picks from a dropdown per blank — like matching).
+  Use this when a sentence or paragraph has 2 or more blank spaces that need separate answers.
+  • body = the question text with [blank_id] markers using descriptive names, e.g.:
+    "The [particle_blank] has a positive charge and lives in the [location_blank]."
+  • fib_blanks = object where each key is a blank_id and value has:
+      "correct": the correct answer string
+      "choices": array of 3-5 choices including the correct one (plausible distractors)
+    Example: { "particle_blank": { "correct": "proton", "choices": ["proton","electron","neutron","photon"] },
+               "location_blank": { "correct": "nucleus", "choices": ["nucleus","orbital","valence shell","electron cloud"] } }
+  • answers = [] (leave empty)
+  • correct = [] (leave empty)
+  • suggested_answer = "blank1: answer1, blank2: answer2" listing each blank's answer
 
 - ESSAY = open response requiring written explanation.
   • answers = [] (leave empty)
@@ -355,7 +473,40 @@ Rules for each type — always fill "correct" and "suggested_answer" to the best
 - FILE = file upload question.
   • answers = [], correct = [], suggested_answer = ""
 
-Default to MC if the question type is unclear. Extract every question found, even if partial.`;
+Default to MC if the question type is unclear. Extract every question found, even if partial.
+
+IMAGE ASSOCIATION: If the document contains embedded images (you will see [DOCUMENT HAS N EMBEDDED IMAGE(S)] for DOCX, or you can see images natively in PDFs), and a question has an associated figure, diagram, graph, or image:
+- For DOCX: set "image_ref" to the key shown in the document header (e.g. "img_001")
+- For PDF: set "image_ref" to "p{PAGE}_{first_image_name_on_page}" — describe what you see so we can verify, and set "image_page" to the page number
+- If no image is associated with a question, leave "image_ref" as ""
+
+Short answer preference: ${saRule}
+
+CRITICAL — Chemistry formatting: All chemical formulas, equations, and scientific notation MUST use proper Unicode subscript and superscript characters. Never use plain numbers next to letters for formulas. Use these exact characters:
+
+Superscripts: ⁰ ¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹ ⁺ ⁻
+Subscripts:   ₀ ₁ ₂ ₃ ₄ ₅ ₆ ₇ ₈ ₉ ₊ ₋ ₍ ₎ ₛ ₗ
+
+Common symbols: → (reaction arrow) ⇄ (equilibrium) Δ (delta) ° (degree) ∙ (dot)
+
+Examples of correct formatting:
+- Water: H₂O  (not H2O)
+- Sulfuric acid: H₂SO₄  (not H2SO4)
+- Carbon dioxide: CO₂  (not CO2)
+- Calcium carbonate: CaCO₃  (not CaCO3)
+- Glucose: C₆H₁₂O₆  (not C6H12O6)
+- Hydroxide ion: OH⁻  (not OH-)
+- Sulfate ion: SO₄²⁻  (not SO4 2-)
+- Iron(III): Fe³⁺  (not Fe3+)
+- Avogadro's number: 6.02 × 10²³  (not 6.02 x 10^23)
+- Electron config: 1s² 2s² 2p⁶  (not 1s2 2s2 2p6)
+- Equilibrium: Pb(NO₃)₂ (aq) + 2KI (aq) → PbI₂ (s) + 2KNO₃ (aq)
+- Phosphate: PO₄³⁻
+- Ammonium: NH₄⁺
+- Bicarbonate: HCO₃⁻
+- Acetate: C₂H₃O₂⁻
+
+Apply this to every formula, ion, charge, and equation in every question body, answer choice, and feedback field.`;
 
   const msgContent = content.kind === 'pdf'
     ? [
@@ -435,11 +586,14 @@ Default to MC if the question type is unclear. Extract every question found, eve
       body: q.body || '',
       answers: q.answers || [],
       correct: q.correct || [],
+      fib_blanks: q.fib_blanks || {},
+      image_ref: q.image_ref || '',
       suggested_answer: q.suggested_answer || '',
       feedback: { general: q.feedback?.general||'', correct: q.feedback?.correct||'', incorrect: q.feedback?.incorrect||'' }
     }));
 
     if (parsed.suggested_title) document.getElementById('quizTitle').value = parsed.suggested_title;
+    extractedImages = content.images || {};
 
     setStatus('✅ Extracted ' + questions.length + ' question' + (questions.length !== 1 ? 's' : '') + ' from "' + selectedFile.name + '"', 'done');
     document.getElementById('extractSummary').innerHTML = '<strong>' + questions.length + ' questions extracted</strong> from "' + selectedFile.name + '". Review and edit below before downloading.';
@@ -497,6 +651,27 @@ function buildEditForm(q) {
       answersHtml = `
         <label>Acceptable Answers — one per line</label>
         <textarea style="min-height:60px" oninput="getQ(${q.id}).answers=this.value.split('\\n').map(s=>s.trim()).filter(Boolean)">${esc(q.answers.join('\n'))}</textarea>`;
+    } else if (q.type === 'FIB') {
+      const blankIds = Object.keys(q.fib_blanks || {});
+      if (blankIds.length === 0) {
+        answersHtml = `<div class="notice notice-warn" style="margin-bottom:8px">No blanks found. Edit the question body to include [blank_id] markers, then they will appear here.</div>`;
+      } else {
+        const blankSections = blankIds.map(bid => {
+          const bl = q.fib_blanks[bid] || { correct: '', choices: [] };
+          const choiceRows = (bl.choices || []).map((c, ci) => `
+            <div class="ans-row">
+              <input type="radio" name="fibcor-${q.id}-${bid}" ${c === bl.correct ? 'checked' : ''} onchange="setFIBCorrect(${q.id},'${bid}',${ci})">
+              <input type="text" value="${esc(c)}" placeholder="Choice ${ci+1}" oninput="updateFIBChoice(${q.id},'${bid}',${ci},this.value)">
+              <button class="btn btn-red btn-sm" onclick="removeFIBChoice(${q.id},'${bid}',${ci})">✕</button>
+            </div>`).join('');
+          return `<div style="background:#f4f4fc;border:1.5px solid #e0e0f0;border-radius:10px;padding:12px;margin-bottom:8px">
+            <div style="font-weight:700;font-size:13px;color:#201D52;margin-bottom:8px">[${bid}] — select the correct choice</div>
+            <div id="fibchoices-${q.id}-${bid}">${choiceRows}</div>
+            <button class="btn btn-gray btn-sm" style="margin-top:6px" onclick="addFIBChoice(${q.id},'${bid}')">+ Add Choice</button>
+          </div>`;
+        }).join('');
+        answersHtml = `<label>Blank Answers (radio = correct)</label>${blankSections}`;
+      }
     } else {
       const multi = q.type === 'MR';
       const itype = multi ? 'checkbox' : 'radio';
@@ -533,6 +708,12 @@ function buildEditForm(q) {
     ${q.suggested_answer ? `<div class="notice notice-info" style="margin-top:10px">
       <strong>🤖 AI Suggested Answer:</strong> ${esc(q.suggested_answer)}
       <span style="font-size:12px;opacity:.75;margin-left:8px">(for your reference — not exported to Canvas)</span>
+    </div>` : ''}
+    ${q.image_ref && extractedImages[q.image_ref] ? `<div style="margin-top:10px">
+      <label>Associated Image</label>
+      <img src="data:${extractedImages[q.image_ref].mime};base64,${extractedImages[q.image_ref].data}"
+           style="max-width:100%;max-height:280px;border-radius:8px;border:1.5px solid #e0e0f0;display:block">
+      <div style="font-size:11px;color:#888;margin-top:4px">Key: ${q.image_ref} — will be embedded in QTI ZIP</div>
     </div>` : ''}
     <hr class="soft">
     <div class="row2">
@@ -574,8 +755,38 @@ function changeType(id, type) {
   if (type === 'TF') q.answers = ['True','False'];
   if (type === 'ESSAY' || type === 'FILE') q.answers = [];
   if (type === 'NUM' || type === 'SA') q.answers = [''];
+  if (type === 'FIB') { q.answers = []; q.fib_blanks = {}; }
   reRenderCard(id);
   toggleEdit(id);
+}
+
+// ─── FIB Edit Helpers ──────────────────────────────────────────────────────────
+function setFIBCorrect(id, blankId, choiceIdx) {
+  const q = getQ(id);
+  if (!q || !q.fib_blanks[blankId]) return;
+  q.fib_blanks[blankId].correct = q.fib_blanks[blankId].choices[choiceIdx] || '';
+}
+function updateFIBChoice(id, blankId, choiceIdx, val) {
+  const q = getQ(id);
+  if (!q || !q.fib_blanks[blankId]) return;
+  const bl = q.fib_blanks[blankId];
+  const wasCorrect = bl.choices[choiceIdx] === bl.correct;
+  bl.choices[choiceIdx] = val;
+  if (wasCorrect) bl.correct = val;
+}
+function addFIBChoice(id, blankId) {
+  const q = getQ(id);
+  if (!q || !q.fib_blanks[blankId]) return;
+  q.fib_blanks[blankId].choices.push('');
+  reRenderCard(id); toggleEdit(id);
+}
+function removeFIBChoice(id, blankId, choiceIdx) {
+  const q = getQ(id);
+  if (!q || !q.fib_blanks[blankId]) return;
+  const bl = q.fib_blanks[blankId];
+  if (bl.choices.length <= 1) return;
+  bl.choices.splice(choiceIdx, 1);
+  reRenderCard(id); toggleEdit(id);
 }
 
 function reRenderCard(id) {
@@ -659,18 +870,27 @@ function numCondition(rule) {
   return isNaN(n) ? `<varequal respident="response1">0</varequal>` : `<varequal respident="response1">${n}</varequal>`;
 }
 
-function itemXML(q, num) {
+function itemXML(q, num, imageMap) {
   const ident = 'QUE_' + String(num).padStart(4,'0');
   const labels = ['A','B','C','D','E'];
-  const typeMap = {MC:'multiple_choice_question',MR:'multiple_answers_question',TF:'true_false_question',NUM:'numerical_question',SA:'short_answer_question',ESSAY:'essay_question',FILE:'file_upload_question'};
+  const typeMap = {MC:'multiple_choice_question',MR:'multiple_answers_question',TF:'true_false_question',NUM:'numerical_question',SA:'short_answer_question',FIB:'fill_in_multiple_blanks_question',ESSAY:'essay_question',FILE:'file_upload_question'};
   const qt = typeMap[q.type] || 'multiple_choice_question';
 
   let pres = '', resp = '';
 
+  // Image inline HTML (embedded in question body)
+  let imgHtml = '';
+  if (q.image_ref && imageMap && imageMap[q.image_ref]) {
+    const im = imageMap[q.image_ref];
+    const imgFname = 'images/' + q.image_ref + '.' + (im.mime.split('/')[1] || 'png');
+    imgHtml = '<img src="$IMS-CC-FILEBASE$/' + imgFname + '" style="max-width:100%;display:block;margin-bottom:8px" />';
+  }
+  const bodyHtml = imgHtml + esc(q.body);
+
   if (['MC','TF','MR'].includes(q.type)) {
     const card = q.type==='MR' ? 'Multiple' : 'Single';
     const choices = q.answers.map((a,i) => `<response_label ident="${labels[i]}"><material><mattext texttype="text/html">${esc(a)}</mattext></material></response_label>`).join('');
-    pres = `<presentation><material><mattext texttype="text/html">${esc(q.body)}</mattext></material><response_lid ident="response1" rcardinality="${card}"><render_choice>${choices}</render_choice></response_lid></presentation>`;
+    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_lid ident="response1" rcardinality="${card}"><render_choice>${choices}</render_choice></response_lid></presentation>`;
     if (q.type === 'MR') {
       const cl = q.correct.map(i => labels[i]).filter(Boolean);
       const share = cl.length ? Math.round(100/cl.length) : 100;
@@ -681,15 +901,36 @@ function itemXML(q, num) {
       resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="response1">${cl}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition></resprocessing>`;
     }
   } else if (q.type === 'NUM') {
-    pres = `<presentation><material><mattext texttype="text/html">${esc(q.body)}</mattext></material><response_num ident="response1" rcardinality="Single"><render_fib fibtype="Decimal"/></response_num></presentation>`;
+    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_num ident="response1" rcardinality="Single"><render_fib fibtype="Decimal"/></response_num></presentation>`;
     resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar>${numCondition(q.answers[0])}</conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition></resprocessing>`;
   } else if (q.type === 'SA') {
-    pres = `<presentation><material><mattext texttype="text/html">${esc(q.body)}</mattext></material><response_str ident="response1" rcardinality="Single"><render_fib/></response_str></presentation>`;
+    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_str ident="response1" rcardinality="Single"><render_fib/></response_str></presentation>`;
     const conds = q.answers.map(a => `<respcondition continue="No"><conditionvar><varequal respident="response1" case="No">${esc(a)}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition>`).join('');
     resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>${conds}</resprocessing>`;
+  } else if (q.type === 'FIB') {
+    const blankIds = Object.keys(q.fib_blanks || {});
+    const respLids = blankIds.map(bid => {
+      const bl = q.fib_blanks[bid] || { correct: '', choices: [] };
+      const labels2 = 'ABCDEFGHIJ'.split('');
+      const choiceXml = (bl.choices || []).map((c, ci) =>
+        `<response_label ident="${bid}_${labels2[ci]||ci}"><material><mattext texttype="text/html">${esc(c)}</mattext></material></response_label>`
+      ).join('');
+      return `<response_lid ident="response_${bid}" rcardinality="Single"><render_choice>${choiceXml}</render_choice></response_lid>`;
+    }).join('');
+    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material>${respLids}</presentation>`;
+    const numBlanks = blankIds.length || 1;
+    const sharePerBlank = Math.round(100 / numBlanks);
+    const conditions = blankIds.map(bid => {
+      const bl = q.fib_blanks[bid] || { correct: '', choices: [] };
+      const labels2 = 'ABCDEFGHIJ'.split('');
+      const correctIdx = (bl.choices || []).indexOf(bl.correct);
+      const correctLabel = correctIdx >= 0 ? `${bid}_${labels2[correctIdx]||correctIdx}` : `${bid}_A`;
+      return `<respcondition continue="Yes"><conditionvar><varequal respident="response_${bid}">${correctLabel}</varequal></conditionvar><setvar action="Add" varname="SCORE">${sharePerBlank}</setvar></respcondition>`;
+    }).join('');
+    resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>${conditions}</resprocessing>`;
   } else {
     // ESSAY or FILE
-    pres = `<presentation><material><mattext texttype="text/html">${esc(q.body)}</mattext></material><response_str ident="response1" rcardinality="Single"><render_fib rows="5" columns="50"/></response_str></presentation>`;
+    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_str ident="response1" rcardinality="Single"><render_fib rows="5" columns="50"/></response_str></presentation>`;
     resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing>`;
   }
 
@@ -707,7 +948,7 @@ function itemXML(q, num) {
   </item>`;
 }
 
-function assessmentXML(title, desc, settings, aId) {
+function assessmentXML(title, desc, settings, aId, imageMap) {
   const meta = [];
   meta.push('<qtimetadatafield><fieldlabel>cc_profile</fieldlabel><fieldentry>cc.exam.v0p1</fieldentry></qtimetadatafield>');
   if (settings.shuffle) meta.push('<qtimetadatafield><fieldlabel>shuffle_answers</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
@@ -715,7 +956,7 @@ function assessmentXML(title, desc, settings, aId) {
   if (settings.oneAtTime) meta.push('<qtimetadatafield><fieldlabel>one_question_at_a_time</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
   if (settings.cantGoBack) meta.push('<qtimetadatafield><fieldlabel>cant_go_back</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
 
-  const items = questions.map((q,i) => itemXML(q, i+1)).join('\n');
+  const items = questions.map((q,i) => itemXML(q, i+1, imageMap)).join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2"
@@ -730,7 +971,7 @@ function assessmentXML(title, desc, settings, aId) {
 </questestinterop>`;
 }
 
-function manifestXML(aId, filename) {
+function manifestXML(aId, filename, imageKeys) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <manifest identifier="man_${aId}"
   xmlns="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1"
@@ -762,14 +1003,23 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
     cantGoBack: document.getElementById('cantGoBack').checked
   };
 
-  const aId  = 'assessment_' + Date.now();
-  const fname = aId + '.xml';
-  const aXml  = assessmentXML(title, '', settings, aId);
-  const mXml  = manifestXML(aId, fname);
+  const aId     = 'assessment_' + Date.now();
+  const fname   = aId + '.xml';
+  // Collect only images actually referenced by questions
+  const usedImgKeys = [...new Set(questions.map(q => q.image_ref).filter(r => r && extractedImages[r]))];
+  const aXml  = assessmentXML(title, '', settings, aId, extractedImages);
+  const mXml  = manifestXML(aId, fname, usedImgKeys);
 
   const zip = new JSZip();
   zip.file('imsmanifest.xml', mXml);
   zip.file(fname, aXml);
+
+  // Embed images into ZIP
+  for (const key of usedImgKeys) {
+    const im  = extractedImages[key];
+    const ext = (im.mime || 'image/png').split('/')[1] || 'png';
+    zip.file('images/' + key + '.' + ext, im.data, { base64: true });
+  }
 
   const blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE' });
   const url  = URL.createObjectURL(blob);
@@ -808,7 +1058,7 @@ function vaultStatusClear() {
       vaultStatus('✅ API key loaded.', 'success');
       setTimeout(vaultStatusClear, 2000);
     } else {
-      vaultStatus('⚠️ No API key stored in your Google Sheet yet.', 'warn');
+      vaultStatus('⚠️ No API key found. Open the Apps Script editor and run saveKeyManually() once to store it.', 'warn');
     }
   } catch(err) {
     vaultStatus('⚠️ Could not load key: ' + err.message, 'error');
