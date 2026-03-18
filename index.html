@@ -96,7 +96,6 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
     </div>
     <!-- hidden inputs still needed by JS -->
     <input type="hidden" id="apiKey">
-    <input type="hidden" id="tokenInput">
   </div>
 
     <!-- STEP 2: UPLOAD -->
@@ -783,11 +782,8 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
   a.remove();
 });
 
-// ─── Key Vault (hardcoded) ─────────────────────────────────────────────────────────────────────────
-const VAULT_URL       = 'https://script.google.com/macros/s/AKfycbxV6wnaoAjkhUXIdSz6w5kq_PwkMplJ7Z6kxDrDqCjrZVLwsoKrr-UdPEV7fQxVNb0Mpw/exec';
-const VAULT_TOKEN_KEY = 'qti_vault_token';
-
-function getVaultToken() { return (localStorage.getItem(VAULT_TOKEN_KEY) || '').trim(); }
+// ─── Key Vault ─────────────────────────────────────────────────────────────────────────────────
+const VAULT_URL = 'https://script.google.com/macros/s/AKfycbxV6wnaoAjkhUXIdSz6w5kq_PwkMplJ7Z6kxDrDqCjrZVLwsoKrr-UdPEV7fQxVNb0Mpw/exec';
 
 function vaultStatus(msg, type) {
   const el = document.getElementById('vaultStatus');
@@ -799,80 +795,23 @@ function vaultStatusClear() {
   document.getElementById('vaultStatus').style.display = 'none';
 }
 
-// Called on first visit: walks user through saving a token
-async function firstTimeSetup() {
-  const token = prompt('First-time setup: Enter a secret token (12+ characters, make one up).');
-  if (!token || token.trim().length < 12) {
-    vaultStatus('&#9888; Token too short. Refresh the page to try again.', 'error');
-    return;
-  }
-  vaultStatus('<span class="spinner"></span> Saving token…', 'info');
-  try {
-    const res  = await fetch(VAULT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'saveToken', token: '', newToken: token.trim() })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Token save failed');
-    localStorage.setItem(VAULT_TOKEN_KEY, token.trim());
-    vaultStatus('&#9989; Token saved. Now enter your API key and click “Save Key” to store it.', 'success');
-    showSaveKeyPrompt();
-  } catch(err) {
-    vaultStatus('&#9888; ' + err.message, 'error');
-  }
-}
-
-function showSaveKeyPrompt() {
-  const key = prompt('Enter your Anthropic API key (sk-ant-...) to save it to your Google Sheet:');
-  if (!key || !key.trim().startsWith('sk-ant-')) {
-    vaultStatus('&#9888; Invalid key. Refresh and try again.', 'error');
-    return;
-  }
-  saveKeyToVault(key.trim());
-}
-
-async function saveKeyToVault(key) {
-  const token = getVaultToken();
-  if (!token) { firstTimeSetup(); return; }
-  try {
-    const res  = await fetch(VAULT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'save', token, key })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Save failed');
-    document.getElementById('apiKey').value = key;
-    vaultStatus('&#9989; API key saved to your Google Sheet.', 'success');
-    setTimeout(vaultStatusClear, 3000);
-  } catch(err) {
-    vaultStatus('&#9888; ' + err.message, 'error');
-  }
-}
-
-// Auto-load key on every page open
 (async function initVault() {
-  const token = getVaultToken();
-  if (!token) {
-    // No token yet — first-time visitor
-    vaultStatus('&#128274; First-time setup required. <button class="btn btn-indigo btn-sm" style="margin-left:8px" onclick="firstTimeSetup()">Set Up Vault</button>', 'warn');
-    return;
-  }
   vaultStatus('<span class="spinner"></span> Loading API key…', 'info');
   try {
-    const res  = await fetch(VAULT_URL + '?action=get&token=' + encodeURIComponent(token));
+    const res  = await fetch(VAULT_URL + '?action=get');
     const text = await res.text();
     if (text.trim().startsWith('<')) throw new Error('Script returned HTML — check deployment settings.');
     const data = JSON.parse(text);
     if (!data.success) throw new Error(data.error || 'Load failed');
     if (data.key) {
       document.getElementById('apiKey').value = data.key;
-      vaultStatus('&#9989; API key loaded.', 'success');
-      setTimeout(vaultStatusClear, 2500);
+      vaultStatus('✅ API key loaded.', 'success');
+      setTimeout(vaultStatusClear, 2000);
     } else {
-      vaultStatus('&#9888; No key stored yet. <button class="btn btn-indigo btn-sm" style="margin-left:8px" onclick="showSaveKeyPrompt()">Save Key Now</button>', 'warn');
+      vaultStatus('⚠️ No API key stored in your Google Sheet yet.', 'warn');
     }
   } catch(err) {
-    vaultStatus('&#9888; Could not load key: ' + err.message, 'error');
+    vaultStatus('⚠️ Could not load key: ' + err.message, 'error');
   }
 })();
 
