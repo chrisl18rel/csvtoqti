@@ -1,584 +1,881 @@
-<!-- csv-to-canvas-converter.html -->
+<!-- ai-doc-to-qti.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CSV → Canvas Plain-Text Generator</title>
+<title>AI Quiz Extractor → Canvas QTI</title>
 <style>
-html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #111; background: #f7f7fb; }
-.header { background: #201D52; color: #fff; padding: 24px; }
-.header h1 { margin: 0 0 8px 0; font-size: 22px; font-weight: 700; }
-.header p { margin: 0; font-size: 14px; opacity: 0.9; }
-.container { max-width: 1040px; margin: 24px auto; padding: 0 16px 48px 16px; }
-.card { background: #fff; border-radius: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 18px; overflow: visible; }
-.card h2 { margin: 0 0 8px 0; font-size: 18px; }
-.card p { margin: 8px 0; font-size: 14px; }
-.controls { display: grid; grid-template-columns: 1fr; gap: 12px; }
-label { font-size: 14px; font-weight: 600; display: block; margin-bottom: 6px; }
-input[type="file"] { padding: 8px; background: #f1f1f7; border-radius: 10px; border: 1px solid #e6e6ef; width: 100%; }
-input[type="text"] { padding: 10px 12px; border-radius: 10px; border: 1px solid #e6e6ef; width: 100%; box-sizing: border-box; font-size: 14px; }
-textarea { width: 100%; min-height: 360px; border-radius: 12px; border: 1px solid #e4e4ee; padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 13px; background: #fafafe; box-sizing: border-box; }
-.buttonrow { display: flex; flex-wrap: wrap; gap: 10px; }
-button, a.buttonlink { appearance: none; border: none; background: #6465F1; color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 14px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-button.secondary, a.secondary { background: #8F37EB; }
-button.ghost, a.ghost { background: #201D52; }
-button.gray { background: #4e4e5e; }
-.small { font-size: 12px; opacity: 0.85; }
-.kv { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 12px 18px; align-items: start; }
-.kv div { padding: 6px 0; line-height: 1.35; word-break: break-word; overflow-wrap: anywhere; }
-hr { border: none; height: 1px; background: #eee; margin: 16px 0; }
-.notice { background: #DCE5E9; color: #201D52; border-radius: 12px; padding: 12px; font-size: 13px; }
-.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
-.panel { background: #f6f7fb; border: 1px solid #e8e9f3; border-radius: 12px; padding: 12px; }
-.linkrow { display: flex; flex-wrap: wrap; gap: 10px; }
-footer { text-align: center; font-size: 12px; color: #666; padding: 24px; }
-.field { margin-bottom: 12px; }
-.fieldrow { display: grid; grid-template-columns: 1fr; gap: 12px; }
-.fieldrow.two { grid-template-columns: 1fr 1fr; }
-@media (max-width: 640px) { .fieldrow.two { grid-template-columns: 1fr; } }
-.helpcode { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; background: #fff; border: 1px solid #e4e4ee; padding: 10px; border-radius: 10px; width: 100%; box-sizing: border-box; white-space: pre-wrap; word-break: break-word; overflow: auto; }
-.only-bottom { display: flex; justify-content: center; }
-.group-info { background: #f0f8ff; border-left: 4px solid #6465F1; padding: 12px; margin: 10px 0; border-radius: 6px; }
-.example-box { background: #f8f8f8; border: 1px solid #ddd; padding: 10px; border-radius: 6px; margin: 10px 0; font-family: monospace; font-size: 13px; }
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;font-family:'DM Sans',system-ui,sans-serif;color:#1a1a2e;background:#f0f0f8;min-height:100vh}
+.header{background:linear-gradient(135deg,#201D52 0%,#3a2875 100%);color:#fff;padding:28px 32px;position:relative;overflow:hidden}
+.header::before{content:'';position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:rgba(100,101,241,0.18);border-radius:50%}
+.header::after{content:'';position:absolute;bottom:-40px;left:200px;width:140px;height:140px;background:rgba(143,55,235,0.15);border-radius:50%}
+.header h1{margin:0 0 6px;font-size:22px;font-weight:700;position:relative}
+.header p{margin:0;font-size:14px;opacity:.85;position:relative;max-width:640px}
+.container{max-width:980px;margin:28px auto;padding:0 18px 72px}
+.card{background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(32,29,82,.07);padding:24px;margin-bottom:18px;border:1px solid rgba(100,101,241,.08)}
+.card h2{margin:0 0 16px;font-size:17px;font-weight:700;color:#201D52;display:flex;align-items:center;gap:10px}
+.step-dot{background:#6465F1;color:#fff;border-radius:50%;width:28px;height:28px;min-width:28px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+label{font-size:13px;font-weight:600;color:#444;display:block;margin-bottom:5px}
+input[type=text],input[type=password],select,textarea{width:100%;padding:10px 13px;border:1.5px solid #e0e0f0;border-radius:10px;font-size:14px;font-family:inherit;color:#1a1a2e;background:#fafafe;transition:border-color .2s,box-shadow .2s;margin-bottom:14px}
+input[type=text]:focus,input[type=password]:focus,select:focus,textarea:focus{outline:none;border-color:#6465F1;box-shadow:0 0 0 3px rgba(100,101,241,.12)}
+textarea{min-height:70px;resize:vertical;line-height:1.5}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:580px){.row2{grid-template-columns:1fr}}
+.btn{appearance:none;border:none;cursor:pointer;border-radius:10px;padding:10px 18px;font-size:14px;font-weight:700;font-family:inherit;color:#fff;display:inline-flex;align-items:center;gap:7px;transition:opacity .15s,transform .1s;white-space:nowrap}
+.btn:hover{opacity:.88}.btn:active{transform:scale(.97)}
+.btn-indigo{background:#6465F1}.btn-violet{background:#8F37EB}.btn-navy{background:#201D52}
+.btn-gray{background:#6c757d}.btn-red{background:#dc3545}.btn-green{background:#198754}
+.btn-sm{padding:7px 12px;font-size:12px;border-radius:8px}
+.btnrow{display:flex;flex-wrap:wrap;gap:10px}
+.notice{border-radius:10px;padding:11px 14px;font-size:13px;line-height:1.55;margin-bottom:14px}
+.notice-info{background:#eef2ff;color:#3730a3;border-left:4px solid #6465F1}
+.notice-warn{background:#fffbeb;color:#92400e;border-left:4px solid #f59e0b}
+.notice-success{background:#ecfdf5;color:#065f46;border-left:4px solid #10b981}
+.notice-error{background:#fef2f2;color:#991b1b;border-left:4px solid #ef4444}
+.upload-zone{border:2px dashed #c8c8ea;border-radius:14px;padding:32px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:14px}
+.upload-zone:hover,.upload-zone.drag{border-color:#6465F1;background:#f5f5ff}
+.upload-zone .icon{font-size:38px;margin-bottom:8px}
+.upload-zone p{margin:4px 0;font-size:14px;color:#555}
+.upload-zone .fname{font-weight:700;color:#201D52;font-size:15px;margin-top:6px}
+#fileInput{display:none}
+.q-card{background:#fafafe;border:1.5px solid #e8e8f5;border-radius:12px;padding:16px;margin-bottom:10px;transition:border-color .2s}
+.q-card:hover{border-color:#c8c8ea}
+.q-header{display:flex;align-items:center;gap:10px;margin-bottom:0}
+.q-num{background:#201D52;color:#fff;border-radius:7px;padding:3px 9px;font-size:12px;font-weight:700;font-family:'DM Mono',monospace;min-width:36px;text-align:center}
+.type-pill{border-radius:7px;padding:3px 9px;font-size:11px;font-weight:700;color:#fff;font-family:'DM Mono',monospace}
+.tp-MC,.tp-TF{background:#6465F1}.tp-MR{background:#8F37EB}.tp-NUM{background:#059669}
+.tp-SA{background:#d97706}.tp-ESSAY,.tp-FILE{background:#64748b}
+.q-preview{font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#444}
+.q-actions{display:flex;gap:7px;margin-left:auto}
+.q-edit-body{display:none;margin-top:14px;border-top:1.5px solid #e8e8f5;padding-top:14px}
+.q-edit-body.open{display:block}
+.ans-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.ans-row input[type=text]{margin-bottom:0;flex:1}
+.ans-row input[type=checkbox],.ans-row input[type=radio]{width:18px;height:18px;margin:0;cursor:pointer;accent-color:#6465F1;flex-shrink:0}
+.ans-row .btn-sm{flex-shrink:0}
+hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
+.check-group{display:flex;flex-wrap:wrap;gap:16px;font-size:14px}
+.check-group label{font-weight:400;font-size:14px;display:flex;align-items:center;gap:8px;cursor:pointer;color:#333}
+.check-group input[type=checkbox]{width:16px;height:16px;margin:0;accent-color:#6465F1}
+.status-msg{border-radius:10px;padding:11px 14px;font-size:13px;margin-top:10px;display:none}
+.status-msg.show{display:block}
+.status-loading{background:#eff6ff;color:#1e40af}
+.status-done{background:#ecfdf5;color:#065f46}
+.status-error{background:#fef2f2;color:#991b1b}
+.hidden{display:none!important}
+.section-sep{border:none;height:2px;background:linear-gradient(90deg,#e0e0f8,transparent);margin:6px 0 20px}
+.spinner{display:inline-block;width:16px;height:16px;border:2.5px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.questions-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center}
+.q-count-badge{background:#eef2ff;color:#3730a3;border-radius:8px;padding:5px 12px;font-size:13px;font-weight:600;margin-left:auto}
 </style>
 </head>
 <body>
+
 <div class="header">
-  <h1>CSV → Canvas Plain-Text Generator</h1>
-  <p>Upload a CSV and get plain text ready to convert to Canvas format with question grouping and random selection support.</p>
+  <h1>🧪 AI Quiz Extractor → Canvas QTI</h1>
+  <p>Upload a PDF, Word doc, or text file. Claude reads your questions and builds a QTI .zip you import directly into Canvas — no converter site needed.</p>
 </div>
 
 <div class="container">
+
+  <!-- STEP 1: API CONFIG -->
   <div class="card">
-    <h2>How to use</h2>
-    <p>Prepare your CSV using the template below. <strong>Questions start at row 2 (no header row needed for quiz settings).</strong> The TXT we generate includes only content rows.</p>
-    <div class="buttonrow">
-      <button id="downloadTemplate">Download Template CSV</button>
-    </div><p></p>
-    <div class="notice">
-      <strong>Structure:</strong> Row 1 = Headers | Row 2+ = Questions<br>
-      The QuestionNumber column is for your reference only and won't appear in the output.<br>
-      After generating the plain text, use the Canvas Exam Converter to process it for Canvas import.<br><br>
-      <strong>⚠️ Important Requirements:</strong><br>
-      • Questions in the same group must all have the same point value when using GroupPointsPerQuestion.
+    <h2><span class="step-dot">1</span>API Configuration</h2>
+    <div id="vaultStatus" class="notice notice-info" style="display:none;margin-bottom:10px"></div>
+    <div>
+      <label for="modelSel">Model</label>
+      <select id="modelSel" style="max-width:360px">
+        <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — Recommended</option>
+        <option value="claude-opus-4-6">Claude Opus 4.6 — Most Capable</option>
+        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 — Fastest</option>
+      </select>
     </div>
+    <!-- hidden inputs still needed by JS -->
+    <input type="hidden" id="apiKey">
+    <input type="hidden" id="tokenInput">
   </div>
 
+    <!-- STEP 2: UPLOAD -->
   <div class="card">
-    <h2>CSV columns (in order)</h2>
-    <div class="kv">
-      <div>QuestionNumber (A)</div><div>For your reference only - not included in output (pre-numbered)</div>
-      <div>Group (B)</div><div>Group name for organizing questions. Leave blank for no grouping.</div>
-      <div>GroupPick (C)</div><div>Number of questions to randomly select from this group (first row of group only)</div>
-      <div>GroupPointsPerQuestion (D)</div><div>Points per question when randomly selected (first row of group only)</div>
-      <div>Type (E)</div><div>MC, MR, TF, NUM, SA, ESSAY, FILE, TEXT</div>
-      <div>Title (F)</div><div>Optional question or TEXT title</div>
-      <div>Points (G)</div><div>Positive integer (whole numbers only - no decimals); ignored for TEXT and when GroupPointsPerQuestion is used</div>
-      <div>Body (H)</div><div>Question prompt or TEXT content</div>
-      <div>Answer1..Answer5 (I-M)</div><div>MC/MR/TF choice texts; SA acceptable answers; NUM rule in Answer1</div>
-      <div>Correct (N)</div><div>MC/TF single number 1–5; MR comma list like 1,3</div>
-      <div>GeneralFeedback (O)</div><div>Shown for all answers when supported</div>
-      <div>CorrectFeedback (P)</div><div>Shown on correct</div>
-      <div>IncorrectFeedback (Q)</div><div>Shown on incorrect</div>
-      <div>Choice1Feedback..Choice5Feedback (R-V)</div><div>Optional per-choice feedback</div>
-      <div>TextTitle (W)</div><div>For Type=TEXT</div>
-      <div>TextContent (X)</div><div>For Type=TEXT</div>
+    <h2><span class="step-dot">2</span>Upload Document</h2>
+    <div class="notice notice-info">Supported: <strong>PDF</strong> · <strong>.docx</strong> (Word) · <strong>.txt</strong> · <strong>.md</strong> — PDF is sent natively to the AI; Word/text files are converted to text first.</div>
+    <div class="upload-zone" id="uploadZone">
+      <div class="icon">📄</div>
+      <p><strong>Click to choose a file</strong> or drag and drop</p>
+      <p id="chosenFileName" class="fname"></p>
     </div>
+    <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown">
+    <div class="btnrow">
+      <button class="btn btn-indigo" id="extractBtn">🤖 Extract Questions with AI</button>
+      <button class="btn btn-gray" id="clearBtn">Clear</button>
+    </div>
+    <div class="status-msg" id="statusMsg"></div>
   </div>
 
-  <div class="card">
-    <h2>Question Grouping and Random Selection</h2>
-    <div class="group-info">
-      <strong>📚 What is Grouping?</strong><br>
-      Grouping organizes related questions together (like "Chapter 1" or "Easy Questions"). This helps structure your quiz and enables random question selection.
-    </div>
-    
-    <div class="group-info">
-      <strong>✅ How to Use Groups:</strong><br>
-      <ul style="margin: 5px 0; padding-left: 20px;">
-        <li><b>To group questions:</b> Enter the same group name in column B for all questions you want together</li>
-        <li><b>To leave ungrouped:</b> Simply leave column B blank - the question stands alone</li>
-        <li><b>Group names:</b> Use any name like "Chapter 1", "Atoms", "Lab Safety", etc.</li>
-      </ul>
-    </div>
-    
-    <div class="group-info">
-      <strong>🎲 Random Selection (Optional):</strong><br>
-      Want Canvas to randomly pick only some questions from a group? Use columns C and D on the <b>first row of each new group</b>:
-      <ul style="margin: 5px 0; padding-left: 20px;">
-        <li><b>Column C (GroupPick):</b> How many questions to randomly select</li>
-        <li><b>Column D (GroupPointsPerQuestion):</b> Points each selected question is worth</li>
-        <li><b>Important:</b> Only fill these in on the first question of a new group, leave blank for other rows</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Question type instructions</h2>
-    <div class="grid2">
-      <div class="panel"><b>MC</b><p>Single correct choice. Put choices in Answer1..Answer5. Put the correct index in Correct, for example 3. Uses bracket format: [ ] for incorrect, [*] for correct.</p></div>
-      <div class="panel"><b>MR</b><p>Multiple correct choices. Put choices in Answer1..Answer5. Put a comma list in Correct, for example 1,3. Uses bracket format: [ ] for incorrect, [*] for correct.</p></div>
-      <div class="panel"><b>TF</b><p>Use Answer1=True and Answer2=False or your own labels. Put Correct=1 for True or 2 for False.</p></div>
-      <div class="panel"><b>NUM</b><p>Put the rule in Answer1. Examples: 5 for exact; [1.2598, 1.2600] for range; 1.4142 +- 0.0001 or 100 +- 5% for margin.</p></div>
-      <div class="panel"><b>SA</b><p>Put acceptable exact answers in Answer1..Answer5. Case sensitivity follows Canvas behavior.</p></div>
-      <div class="panel"><b>ESSAY</b><p>No answers needed. The generator adds the essay marker automatically.</p></div>
-      <div class="panel"><b>FILE</b><p>No answers needed. The generator adds the file-upload marker automatically.</p></div>
-      <div class="panel"><b>TEXT</b><p>Non-question content. Use TextTitle and TextContent. No points.</p></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>CSV → TXT</h2>
-    <div class="controls">
-      <label for="csvFile">Choose CSV file</label>
-      <input type="file" id="csvFile" accept=".csv,text/csv">
-      <div class="buttonrow">
-        <button id="convertBtn">Convert CSV → Plain Text</button>
-        <button id="clearBtn" class="gray">Clear</button>
+  <!-- STEP 3: QUIZ SETTINGS -->
+  <div class="card hidden" id="settingsCard">
+    <h2><span class="step-dot">3</span>Quiz Settings</h2>
+    <div class="row2">
+      <div>
+        <label for="quizTitle">Quiz Title</label>
+        <input type="text" id="quizTitle" placeholder="My Chemistry Quiz">
+      </div>
+      <div>
+        <label for="defaultPts">Default Points Per Question</label>
+        <input type="text" id="defaultPts" value="1" placeholder="1">
       </div>
     </div>
-    <textarea id="output" placeholder="Your Canvas-compatible plain text will appear here. The header row is never included."></textarea>
-    <div class="buttonrow" style="margin-top:10px;">
-      <button id="copyBtn">Copy To Clipboard</button>
-      <button id="downloadTxtBtn" class="secondary">Download .txt</button>
+    <label for="quizDesc">Description (optional)</label>
+    <textarea id="quizDesc" placeholder="Optional description shown to students"></textarea>
+    <label>Quiz Behavior</label>
+    <div class="check-group">
+      <label><input type="checkbox" id="shuffleAns"> Shuffle answer order</label>
+      <label><input type="checkbox" id="showCorrect"> Show correct answers after submission</label>
+      <label><input type="checkbox" id="oneAtTime"> One question at a time</label>
+      <label><input type="checkbox" id="cantGoBack"> Can't go back</label>
     </div>
   </div>
 
-  <div class="card only-bottom">
-    <button id="goToConverterBottom" class="secondary">Continue to Canvas Exam Converter</button>
+  <!-- STEP 4: REVIEW QUESTIONS -->
+  <div class="card hidden" id="questionsCard">
+    <h2><span class="step-dot">4</span>Review &amp; Edit Questions</h2>
+    <div class="notice notice-success" id="extractSummary"></div>
+    <div class="questions-toolbar">
+      <button class="btn btn-violet btn-sm" id="addQBtn">+ Add Question</button>
+      <button class="btn btn-gray btn-sm" id="collapseAllBtn">Collapse All</button>
+      <button class="btn btn-navy btn-sm" id="expandAllBtn">Expand All</button>
+      <span class="q-count-badge" id="qCountBadge">0 questions</span>
+    </div>
+    <div id="questionList"></div>
   </div>
+
+  <!-- STEP 5: EXPORT -->
+  <div class="card hidden" id="exportCard">
+    <h2><span class="step-dot">5</span>Download QTI for Canvas</h2>
+    <div class="notice notice-info">
+      Click below to generate your QTI .zip. Then in Canvas: <strong>Course Settings → Import Course Content → QTI .zip file</strong> → choose your file → Import.
+      <br>After import, open the quiz in Canvas to set time limits, access codes, or other settings not supported by QTI.
+    </div>
+    <div class="btnrow">
+      <button class="btn btn-green" id="downloadBtn">⬇ Download QTI .zip</button>
+    </div>
+  </div>
+
 </div>
 
-<footer>CSV → Canvas Generator • Works offline in your browser</footer>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script>
-function parseCSV(text) {
-  var rows = [];
-  var i = 0;
-  var field = "";
-  var row = [];
-  var inQuotes = false;
-  while (i < text.length) {
-    var c = text[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (i + 1 < text.length && text[i + 1] === '"') {
-          field += '"';
-          i += 2;
-        } else {
-          inQuotes = false;
-          i += 1;
+// ─── State ────────────────────────────────────────────────────────────────────
+let selectedFile = null;
+let questions = [];
+let nextId = 1;
+const TYPES = ['MC','MR','TF','NUM','SA','ESSAY','FILE'];
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+const show = id => document.getElementById(id).classList.remove('hidden');
+const hide = id => document.getElementById(id).classList.add('hidden');
+const esc  = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function setStatus(msg, type) {
+  const el = document.getElementById('statusMsg');
+  el.className = 'status-msg show status-' + type;
+  el.innerHTML = msg;
+}
+function clearStatus() {
+  const el = document.getElementById('statusMsg');
+  el.className = 'status-msg';
+  el.innerHTML = '';
+}
+
+function updateQCount() {
+  const b = document.getElementById('qCountBadge');
+  b.textContent = questions.length + ' question' + (questions.length !== 1 ? 's' : '');
+}
+
+// ─── File Upload ──────────────────────────────────────────────────────────────
+const uploadZone = document.getElementById('uploadZone');
+const fileInput  = document.getElementById('fileInput');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag');
+  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+});
+
+function setFile(f) {
+  selectedFile = f;
+  document.getElementById('chosenFileName').textContent = '📎 ' + f.name;
+  clearStatus();
+}
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  selectedFile = null;
+  fileInput.value = '';
+  document.getElementById('chosenFileName').textContent = '';
+  clearStatus();
+  questions = [];
+  document.getElementById('questionList').innerHTML = '';
+  ['settingsCard','questionsCard','exportCard'].forEach(hide);
+});
+
+// ─── File Reading ─────────────────────────────────────────────────────────────
+async function readFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'pdf') {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = e => {
+        const bytes = new Uint8Array(e.target.result);
+        let b64 = '';
+        const chunk = 8192;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          b64 += String.fromCharCode(...bytes.subarray(i, i + chunk));
         }
-      } else {
-        field += c;
-        i += 1;
+        res({ kind: 'pdf', data: btoa(b64) });
+      };
+      r.onerror = rej;
+      r.readAsArrayBuffer(file);
+    });
+  } else if (ext === 'docx') {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = async e => {
+        try {
+          const result = await mammoth.extractRawText({ arrayBuffer: e.target.result });
+          res({ kind: 'text', data: result.value });
+        } catch(err) { rej(err); }
+      };
+      r.onerror = rej;
+      r.readAsArrayBuffer(file);
+    });
+  } else {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = e => res({ kind: 'text', data: e.target.result });
+      r.onerror = rej;
+      r.readAsText(file);
+    });
+  }
+}
+
+// ─── AI Extraction ────────────────────────────────────────────────────────────
+// ─── JSON Parse Helper ───────────────────────────────────────────────────────────────────
+function tryParseJSON(raw) {
+  if (!raw || !raw.trim()) return null;
+  try { return JSON.parse(raw.trim()); } catch(e) {}
+  const fenced = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  try { return JSON.parse(fenced); } catch(e) {}
+  const firstBrace = raw.indexOf('{');
+  const lastBrace  = raw.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try { return JSON.parse(raw.slice(firstBrace, lastBrace + 1)); } catch(e) {}
+  }
+  const fb2 = fenced.indexOf('{');
+  const lb2 = fenced.lastIndexOf('}');
+  if (fb2 !== -1 && lb2 > fb2) {
+    try { return JSON.parse(fenced.slice(fb2, lb2 + 1)); } catch(e) {}
+  }
+  return null;
+}
+
+document.getElementById('extractBtn').addEventListener('click', doExtract);
+
+async function doExtract() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const model  = document.getElementById('modelSel').value;
+  if (!apiKey) { setStatus('⚠ Enter your Anthropic API key above.', 'error'); return; }
+  if (!selectedFile) { setStatus('⚠ Choose a document to upload first.', 'error'); return; }
+
+  setStatus('<span class="spinner"></span> Reading document…', 'loading');
+
+  let content;
+  try { content = await readFile(selectedFile); }
+  catch(err) { setStatus('⚠ Could not read file: ' + err.message, 'error'); return; }
+
+  setStatus('<span class="spinner"></span> Sending to Claude — extracting questions…', 'loading');
+
+  const SYS = `You are a quiz extraction assistant. Extract every question from the provided document and suggest correct answers using your chemistry and science knowledge.
+Return ONLY valid JSON — no markdown fences, no explanation, nothing else.
+
+Schema:
+{
+  "suggested_title": "string",
+  "questions": [
+    {
+      "type": "MC|MR|TF|NUM|SA|ESSAY|FILE",
+      "title": "",
+      "points": 1,
+      "body": "Question stem text",
+      "answers": ["Choice A", "Choice B", "Choice C", "Choice D"],
+      "correct": [2],
+      "suggested_answer": "",
+      "feedback": { "general": "", "correct": "", "incorrect": "" }
+    }
+  ]
+}
+
+Rules for each type — always fill "correct" and "suggested_answer" to the best of your knowledge:
+
+- MC  = single correct multiple choice.
+  • correct = [0-based index of the correct answer choice]
+  • suggested_answer = the text of the correct answer choice (e.g. "5 m/s")
+
+- MR  = multiple correct (select all that apply).
+  • correct = [array of 0-based indices of all correct choices]
+  • suggested_answer = comma-separated text of all correct choices
+
+- TF  = true/false.
+  • answers = ["True","False"] always
+  • correct = [0] if the statement is True, [1] if the statement is False
+  • suggested_answer = "True" or "False"
+
+- NUM = numerical answer.
+  • answers = [a tight bounding range that perfectly brackets the exact correct answer, formatted as "[min, max]" — for example if the answer is 6.022e23 use "[6.020e23, 6.024e23]", if the answer is 273.15 use "[273.14, 273.16]". Make the range just wide enough to accept rounding to the expected sig figs.]
+  • correct = [] (leave empty, the range in answers[0] is the answer)
+  • suggested_answer = the exact correct numerical value with units (e.g. "6.022 × 10²³ mol⁻¹")
+
+- SA  = fill-in-the-blank.
+  • answers = list of acceptable answer strings (include common variations, abbreviations, and alternate spellings)
+  • correct = [] (leave empty)
+  • suggested_answer = the primary canonical correct answer
+
+- ESSAY = open response requiring written explanation.
+  • answers = [] (leave empty)
+  • correct = [] (leave empty)
+  • suggested_answer = a concise model answer or key points the response should include (2-4 sentences)
+
+- FILE = file upload question.
+  • answers = [], correct = [], suggested_answer = ""
+
+Default to MC if the question type is unclear. Extract every question found, even if partial.`;
+
+  const msgContent = content.kind === 'pdf'
+    ? [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: content.data } },
+        { type: 'text', text: 'Extract all quiz questions from this document. Return only the JSON object.' }
+      ]
+    : 'Extract all quiz questions from this document:\n\n' + content.data;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 8192,
+        system: SYS,
+        messages: [{ role: 'user', content: msgContent }]
+      })
+    });
+
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.error?.message || 'API error ' + resp.status);
+    }
+
+    const data = await resp.json();
+    const raw  = data.content.filter(b => b.type === 'text').map(b => b.text).join('');
+
+    let parsed = tryParseJSON(raw);
+
+    // If first attempt failed, send the bad output back and ask Claude to fix it
+    if (!parsed) {
+      setStatus('<span class="spinner"></span> Cleaning up response — retrying…', 'loading');
+      const fixResp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 8192,
+          system: 'You are a JSON repair assistant. Return ONLY the valid JSON object from the input — no markdown fences, no explanation, nothing else.',
+          messages: [{ role: 'user', content: 'Fix this and return only valid JSON:\n\n' + raw }]
+        })
+      });
+      if (fixResp.ok) {
+        const fixData = await fixResp.json();
+        const fixRaw  = fixData.content.filter(b => b.type === 'text').map(b => b.text).join('');
+        parsed = tryParseJSON(fixRaw);
       }
+    }
+
+    if (!parsed) {
+      throw new Error('Could not parse a valid response from Claude. Try Opus or try again — long documents sometimes need a second attempt.');
+    }
+
+    const extracted = (parsed.questions || []).filter(q => q.body && q.body.trim());
+    if (!extracted.length) {
+      setStatus('⚠ No questions found. Make sure your document contains quiz questions.', 'error');
+      return;
+    }
+
+    const pts = parseInt(document.getElementById('defaultPts').value) || 1;
+    questions = extracted.map(q => ({
+      id: nextId++,
+      type: TYPES.includes(q.type) ? q.type : 'MC',
+      title: q.title || '',
+      points: parseInt(q.points) || pts,
+      body: q.body || '',
+      answers: q.answers || [],
+      correct: q.correct || [],
+      suggested_answer: q.suggested_answer || '',
+      feedback: { general: q.feedback?.general||'', correct: q.feedback?.correct||'', incorrect: q.feedback?.incorrect||'' }
+    }));
+
+    if (parsed.suggested_title) document.getElementById('quizTitle').value = parsed.suggested_title;
+
+    setStatus('✅ Extracted ' + questions.length + ' question' + (questions.length !== 1 ? 's' : '') + ' from "' + selectedFile.name + '"', 'done');
+    document.getElementById('extractSummary').innerHTML = '<strong>' + questions.length + ' questions extracted</strong> from "' + selectedFile.name + '". Review and edit below before downloading.';
+
+    renderAllQuestions();
+    updateQCount();
+    ['settingsCard','questionsCard','exportCard'].forEach(show);
+    document.getElementById('settingsCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch(err) {
+    setStatus('⚠ ' + err.message, 'error');
+  }
+}
+
+// ─── Question Rendering ────────────────────────────────────────────────────────
+function renderAllQuestions() {
+  const list = document.getElementById('questionList');
+  list.innerHTML = '';
+  questions.forEach((q, i) => list.appendChild(buildCard(q, i)));
+}
+
+function buildCard(q, idx) {
+  const div = document.createElement('div');
+  div.className = 'q-card';
+  div.id = 'qcard-' + q.id;
+
+  const tpColors = {MC:'#6465F1',MR:'#8F37EB',TF:'#6465F1',NUM:'#059669',SA:'#d97706',ESSAY:'#64748b',FILE:'#64748b'};
+
+  div.innerHTML = `
+    <div class="q-header">
+      <span class="q-num">Q${idx+1}</span>
+      <span class="type-pill tp-${q.type}">${q.type}</span>
+      <span class="q-preview">${esc(q.body.substring(0,90))}${q.body.length>90?'…':''}</span>
+      <div class="q-actions">
+        <button class="btn btn-indigo btn-sm" onclick="toggleEdit(${q.id})">✏ Edit</button>
+        <button class="btn btn-red btn-sm" onclick="deleteQ(${q.id})">✕</button>
+      </div>
+    </div>
+    <div class="q-edit-body" id="edit-${q.id}">${buildEditForm(q)}</div>
+  `;
+  return div;
+}
+
+function buildEditForm(q) {
+  const typeOpts = TYPES.map(t => `<option value="${t}" ${q.type===t?'selected':''}>${t}</option>`).join('');
+  let answersHtml = '';
+
+  if (!['ESSAY','FILE'].includes(q.type)) {
+    if (q.type === 'NUM') {
+      answersHtml = `
+        <label>Numerical Answer Rule</label>
+        <input type="text" placeholder="e.g.  5   or   5 +- 0.1   or   [4.9, 5.1]   or   100 +- 5%"
+          value="${esc(q.answers[0]||'')}" oninput="getQ(${q.id}).answers[0]=this.value">`;
+    } else if (q.type === 'SA') {
+      answersHtml = `
+        <label>Acceptable Answers — one per line</label>
+        <textarea style="min-height:60px" oninput="getQ(${q.id}).answers=this.value.split('\\n').map(s=>s.trim()).filter(Boolean)">${esc(q.answers.join('\n'))}</textarea>`;
     } else {
-      if (c === '"') {
-        inQuotes = true;
-        i += 1;
-      } else if (c === ",") {
-        row.push(field);
-        field = "";
-        i += 1;
-      } else if (c === "\r") {
-        i += 1;
-      } else if (c === "\n") {
-        row.push(field);
-        rows.push(row);
-        row = [];
-        field = "";
-        i += 1;
-      } else {
-        field += c;
-        i += 1;
-      }
+      const multi = q.type === 'MR';
+      const itype = multi ? 'checkbox' : 'radio';
+      const ansList = q.answers.length ? q.answers : ['','','',''];
+      const rows = ansList.map((a, i) => {
+        const chk = multi ? q.correct.includes(i) : q.correct[0]===i;
+        return `<div class="ans-row">
+          <input type="${itype}" name="cor-${q.id}" ${chk?'checked':''} onchange="updateCorrect(${q.id},${i},this.checked)">
+          <input type="text" value="${esc(a)}" placeholder="Answer option ${i+1}" oninput="getQ(${q.id}).answers[${i}]=this.value">
+          <button class="btn btn-red btn-sm" onclick="removeAns(${q.id},${i})">✕</button>
+        </div>`;
+      }).join('');
+      answersHtml = `
+        <label>${multi?'Answers — check all that are correct':'Answers — select the correct one'}</label>
+        <div id="anslist-${q.id}">${rows}</div>
+        <button class="btn btn-gray btn-sm" style="margin-top:6px" onclick="addAns(${q.id})">+ Add Answer</button>`;
     }
   }
-  row.push(field);
-  rows.push(row);
-  return rows;
+
+  return `
+    <div class="row2">
+      <div>
+        <label>Question Type</label>
+        <select onchange="changeType(${q.id},this.value)">${typeOpts}</select>
+      </div>
+      <div>
+        <label>Points</label>
+        <input type="text" value="${q.points}" oninput="getQ(${q.id}).points=parseInt(this.value)||1">
+      </div>
+    </div>
+    <label>Question Text</label>
+    <textarea style="min-height:60px" oninput="getQ(${q.id}).body=this.value">${esc(q.body)}</textarea>
+    ${answersHtml}
+    ${q.suggested_answer ? `<div class="notice notice-info" style="margin-top:10px">
+      <strong>🤖 AI Suggested Answer:</strong> ${esc(q.suggested_answer)}
+      <span style="font-size:12px;opacity:.75;margin-left:8px">(for your reference — not exported to Canvas)</span>
+    </div>` : ''}
+    <hr class="soft">
+    <div class="row2">
+      <div>
+        <label>General Feedback</label>
+        <input type="text" value="${esc(q.feedback.general)}" placeholder="Shown to all students" oninput="getQ(${q.id}).feedback.general=this.value">
+      </div>
+      <div>
+        <label>Correct / Incorrect Feedback</label>
+        <input type="text" value="${esc(q.feedback.correct)}" placeholder="Shown on correct" oninput="getQ(${q.id}).feedback.correct=this.value" style="margin-bottom:7px">
+        <input type="text" value="${esc(q.feedback.incorrect)}" placeholder="Shown on incorrect" oninput="getQ(${q.id}).feedback.incorrect=this.value">
+      </div>
+    </div>`;
 }
 
-function safe(v) { if (v === undefined || v === null) return ""; return String(v).trim(); }
-function has(val) { return val && String(val).trim().length > 0; }
+// ─── Question Edit Actions ─────────────────────────────────────────────────────
+function toggleEdit(id) { document.getElementById('edit-'+id).classList.toggle('open'); }
+function getQ(id) { return questions.find(q => q.id === id); }
 
-function headerIndexMap(header) {
-  var idx = {};
-  for (var i = 0; i < header.length; i++) idx[header[i].toLowerCase()] = i;
-  return function(name) {
-    var key = name.toLowerCase();
-    return idx.hasOwnProperty(key) ? idx[key] : -1;
+function deleteQ(id) {
+  questions = questions.filter(q => q.id !== id);
+  document.getElementById('qcard-'+id).remove();
+  renumber();
+  updateQCount();
+}
+
+function renumber() {
+  questions.forEach((q, i) => {
+    const el = document.querySelector('#qcard-'+q.id+' .q-num');
+    if (el) el.textContent = 'Q'+(i+1);
+  });
+}
+
+function changeType(id, type) {
+  const q = getQ(id);
+  if (!q) return;
+  q.type = type;
+  q.correct = [];
+  if (type === 'TF') q.answers = ['True','False'];
+  if (type === 'ESSAY' || type === 'FILE') q.answers = [];
+  if (type === 'NUM' || type === 'SA') q.answers = [''];
+  reRenderCard(id);
+  toggleEdit(id);
+}
+
+function reRenderCard(id) {
+  const q = getQ(id);
+  if (!q) return;
+  const idx = questions.indexOf(q);
+  const old = document.getElementById('qcard-'+id);
+  const newCard = buildCard(q, idx);
+  old.parentNode.replaceChild(newCard, old);
+}
+
+function updateCorrect(id, idx, checked) {
+  const q = getQ(id);
+  if (!q) return;
+  if (q.type === 'MR') {
+    if (checked) { if (!q.correct.includes(idx)) q.correct.push(idx); }
+    else q.correct = q.correct.filter(i => i !== idx);
+  } else {
+    q.correct = checked ? [idx] : [];
+  }
+}
+
+function addAns(id) {
+  const q = getQ(id);
+  if (!q) return;
+  const i = q.answers.length;
+  q.answers.push('');
+  const multi = q.type === 'MR';
+  const itype = multi ? 'checkbox' : 'radio';
+  const row = document.createElement('div');
+  row.className = 'ans-row';
+  row.innerHTML = `
+    <input type="${itype}" name="cor-${id}" onchange="updateCorrect(${id},${i},this.checked)">
+    <input type="text" placeholder="Answer option ${i+1}" oninput="getQ(${id}).answers[${i}]=this.value">
+    <button class="btn btn-red btn-sm" onclick="removeAns(${id},${i})">✕</button>`;
+  document.getElementById('anslist-'+id).appendChild(row);
+}
+
+function removeAns(id, idx) {
+  const q = getQ(id);
+  if (!q || q.answers.length <= 1) return;
+  q.answers.splice(idx, 1);
+  q.correct = q.correct.filter(i => i !== idx).map(i => i > idx ? i-1 : i);
+  reRenderCard(id);
+  toggleEdit(id);
+}
+
+// ─── Add Question ──────────────────────────────────────────────────────────────
+document.getElementById('addQBtn').addEventListener('click', () => {
+  const q = { id: nextId++, type:'MC', title:'', points:1, body:'', answers:['','','',''], correct:[], feedback:{general:'',correct:'',incorrect:''} };
+  questions.push(q);
+  updateQCount();
+  const list = document.getElementById('questionList');
+  const card = buildCard(q, questions.length-1);
+  list.appendChild(card);
+  ['settingsCard','questionsCard','exportCard'].forEach(show);
+  toggleEdit(q.id);
+  card.scrollIntoView({ behavior:'smooth', block:'start' });
+});
+
+document.getElementById('collapseAllBtn').addEventListener('click', () => {
+  document.querySelectorAll('.q-edit-body.open').forEach(el => el.classList.remove('open'));
+});
+document.getElementById('expandAllBtn').addEventListener('click', () => {
+  document.querySelectorAll('.q-edit-body').forEach(el => el.classList.add('open'));
+});
+
+// ─── QTI XML Generation ────────────────────────────────────────────────────────
+function numCondition(rule) {
+  const s = (rule||'').trim();
+  const rng = s.match(/^\[([\d.eE+\-]+)\s*,\s*([\d.eE+\-]+)\]$/);
+  if (rng) return `<and><vargte respident="response1">${rng[1]}</vargte><varlte respident="response1">${rng[2]}</varlte></and>`;
+  const mrg = s.match(/^([\d.eE+\-]+)\s*\+-\s*([\d.]+)(%?)$/);
+  if (mrg) {
+    const v = parseFloat(mrg[1]), m = parseFloat(mrg[2]);
+    const lo = mrg[3]==='%' ? v*(1-m/100) : v-m;
+    const hi = mrg[3]==='%' ? v*(1+m/100) : v+m;
+    return `<and><vargte respident="response1">${lo}</vargte><varlte respident="response1">${hi}</varlte></and>`;
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? `<varequal respident="response1">0</varequal>` : `<varequal respident="response1">${n}</varequal>`;
+}
+
+function itemXML(q, num) {
+  const ident = 'QUE_' + String(num).padStart(4,'0');
+  const labels = ['A','B','C','D','E'];
+  const typeMap = {MC:'multiple_choice_question',MR:'multiple_answers_question',TF:'true_false_question',NUM:'numerical_question',SA:'short_answer_question',ESSAY:'essay_question',FILE:'file_upload_question'};
+  const qt = typeMap[q.type] || 'multiple_choice_question';
+
+  let pres = '', resp = '';
+
+  if (['MC','TF','MR'].includes(q.type)) {
+    const card = q.type==='MR' ? 'Multiple' : 'Single';
+    const choices = q.answers.map((a,i) => `<response_label ident="${labels[i]}"><material><mattext texttype="text/html">${esc(a)}</mattext></material></response_label>`).join('');
+    pres = `<presentation><material><mattext texttype="text/html">${esc(q.body)}</mattext></material><response_lid ident="response1" rcardinality="${card}"><render_choice>${choices}</render_choice></response_lid></presentation>`;
+    if (q.type === 'MR') {
+      const cl = q.correct.map(i => labels[i]).filter(Boolean);
+      const share = cl.length ? Math.round(100/cl.length) : 100;
+      const conds = cl.map(l => `<respcondition continue="Yes"><conditionvar><varequal respident="response1">${l}</varequal></conditionvar><setvar action="Add" varname="SCORE">${share}</setvar></respcondition>`).join('');
+      resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>${conds}</resprocessing>`;
+    } else {
+      const cl = labels[q.correct[0]] || 'A';
+      resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="response1">${cl}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition></resprocessing>`;
+    }
+  } else if (q.type === 'NUM') {
+    pres = `<presentation><material><mattext texttype="text/html">${esc(q.body)}</mattext></material><response_num ident="response1" rcardinality="Single"><render_fib fibtype="Decimal"/></response_num></presentation>`;
+    resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar>${numCondition(q.answers[0])}</conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition></resprocessing>`;
+  } else if (q.type === 'SA') {
+    pres = `<presentation><material><mattext texttype="text/html">${esc(q.body)}</mattext></material><response_str ident="response1" rcardinality="Single"><render_fib/></response_str></presentation>`;
+    const conds = q.answers.map(a => `<respcondition continue="No"><conditionvar><varequal respident="response1" case="No">${esc(a)}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition>`).join('');
+    resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>${conds}</resprocessing>`;
+  } else {
+    // ESSAY or FILE
+    pres = `<presentation><material><mattext texttype="text/html">${esc(q.body)}</mattext></material><response_str ident="response1" rcardinality="Single"><render_fib rows="5" columns="50"/></response_str></presentation>`;
+    resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing>`;
+  }
+
+  let fbXml = '';
+  if (q.feedback.general) fbXml += `<itemfeedback ident="general_fb"><flow_mat><material><mattext>${esc(q.feedback.general)}</mattext></material></flow_mat></itemfeedback>`;
+  if (q.feedback.correct) fbXml += `<itemfeedback ident="correct_fb"><flow_mat><material><mattext>${esc(q.feedback.correct)}</mattext></material></flow_mat></itemfeedback>`;
+  if (q.feedback.incorrect) fbXml += `<itemfeedback ident="incorrect_fb"><flow_mat><material><mattext>${esc(q.feedback.incorrect)}</mattext></material></flow_mat></itemfeedback>`;
+
+  return `<item ident="${ident}" title="${esc(q.title||'Question '+num)}">
+    <itemmetadata><qtimetadata>
+      <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>${qt}</fieldentry></qtimetadatafield>
+      <qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${q.points}</fieldentry></qtimetadatafield>
+    </qtimetadata></itemmetadata>
+    ${pres}${resp}${fbXml}
+  </item>`;
+}
+
+function assessmentXML(title, desc, settings, aId) {
+  const meta = [];
+  meta.push('<qtimetadatafield><fieldlabel>cc_profile</fieldlabel><fieldentry>cc.exam.v0p1</fieldentry></qtimetadatafield>');
+  if (settings.shuffle) meta.push('<qtimetadatafield><fieldlabel>shuffle_answers</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
+  if (settings.showCorrect) meta.push('<qtimetadatafield><fieldlabel>show_correct_answers</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
+  if (settings.oneAtTime) meta.push('<qtimetadatafield><fieldlabel>one_question_at_a_time</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
+  if (settings.cantGoBack) meta.push('<qtimetadatafield><fieldlabel>cant_go_back</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
+
+  const items = questions.map((q,i) => itemXML(q, i+1)).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.imsglobal.org/xsd/ims_qtiasiv1p2 http://www.imsglobal.org/xsd/ims_qtiasiv1p2p1.xsd">
+  <assessment ident="${aId}" title="${esc(title||'Quiz')}">
+    <qtimetadata>${meta.join('')}</qtimetadata>
+    <section ident="root_section">
+      ${items}
+    </section>
+  </assessment>
+</questestinterop>`;
+}
+
+function manifestXML(aId, filename) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="man_${aId}"
+  xmlns="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1 http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1.xsd">
+  <metadata><schema>IMS Content</schema><schemaversion>1.1.3</schemaversion></metadata>
+  <organizations/>
+  <resources>
+    <resource identifier="res_${aId}" type="imsqti_xmlv1p2" href="${filename}">
+      <file href="${filename}"/>
+    </resource>
+  </resources>
+</manifest>`;
+}
+
+// ─── Download ──────────────────────────────────────────────────────────────────
+document.getElementById('downloadBtn').addEventListener('click', async () => {
+  if (!questions.length) {
+    setStatus('⚠ No questions to export. Extract or add questions first.', 'error');
+    document.getElementById('statusMsg').classList.add('show');
+    return;
+  }
+
+  const title = document.getElementById('quizTitle').value.trim() || 'Quiz';
+  const settings = {
+    shuffle:    document.getElementById('shuffleAns').checked,
+    showCorrect:document.getElementById('showCorrect').checked,
+    oneAtTime:  document.getElementById('oneAtTime').checked,
+    cantGoBack: document.getElementById('cantGoBack').checked
   };
-}
 
-function buildTextFromRows(rows) {
-  if (!rows || rows.length === 0) return "";
-  var header = rows[0].map(safe);
-  var col = headerIndexMap(header);
-  var out = [];
-  var currentGroup = "";
-  var inGroup = false;
-  var questionNumber = 0;
-  
-  // Process questions starting from row 2
-  for (var r = 1; r < rows.length; r++) {
-    var row = rows[r];
-    if (!row || row.length === 0) continue;
-    
-    var group = safe(row[col("Group")]);
-    var groupPick = safe(row[col("GroupPick")]);
-    var groupPoints = safe(row[col("GroupPointsPerQuestion")]);
-    var type = safe(row[col("Type")]).toUpperCase();
-    
-    if (!has(type)) continue;
-    
-    // Handle group changes
-    if (has(group) && group !== currentGroup) {
-      // Close previous group if one was open
-      if (inGroup) {
-        out.push("END_GROUP");
-        out.push("");
-      }
-      
-      // Start new group
-      out.push("GROUP");
-      if (has(groupPick)) {
-        out.push("pick: " + groupPick);
-      }
-      if (has(groupPoints)) {
-        out.push("points per question: " + groupPoints);
-      }
-      currentGroup = group;
-      inGroup = true;
-    } else if (!has(group) && inGroup) {
-      // End group when moving to ungrouped question
-      out.push("END_GROUP");
-      out.push("");
-      currentGroup = "";
-      inGroup = false;
-    }
-    
-    // Increment question number for non-TEXT types
-    if (type !== "TEXT") {
-      questionNumber++;
-    }
-    
-    if (type === "TEXT") {
-      var tTitle = safe(row[col("TextTitle")]);
-      var tBody = safe(row[col("TextContent")]);
-      if (has(tTitle)) out.push("Text title: " + tTitle);
-      if (has(tBody)) out.push("Text: " + tBody);
-      out.push("");
-      continue;
-    }
-    
-    var body = safe(row[col("Body")]);
-    var a1 = safe(row[col("Answer1")]);
-    var a2 = safe(row[col("Answer2")]);
-    var a3 = safe(row[col("Answer3")]);
-    var a4 = safe(row[col("Answer4")]);
-    var a5 = safe(row[col("Answer5")]);
-    var cAns = safe(row[col("Correct")]);
-    var gfb = safe(row[col("GeneralFeedback")]);
-    var cfb = safe(row[col("CorrectFeedback")]);
-    var ifb = safe(row[col("IncorrectFeedback")]);
-    var ch1fb = safe(row[col("Choice1Feedback")]);
-    var ch2fb = safe(row[col("Choice2Feedback")]);
-    var ch3fb = safe(row[col("Choice3Feedback")]);
-    var ch4fb = safe(row[col("Choice4Feedback")]);
-    var ch5fb = safe(row[col("Choice5Feedback")]);
-    
-    // Add question with number
-    if (has(body)) {
-      out.push(questionNumber + ". " + body);
-    }
-    
-    if (type === "MC") {
-      var choices = [a1, a2, a3, a4, a5];
-      var correctIndex;
-      
-      // Handle both letter (A, B, C, D, E) and number (1, 2, 3, 4, 5) formats
-      if (cAns && isNaN(cAns)) {
-        // It's a letter, convert to number (A=1, B=2, C=3, D=4, E=5)
-        var letter = cAns.toUpperCase().trim();
-        correctIndex = letter.charCodeAt(0) - 64; // A=65, so A=1, B=2, etc.
-      } else {
-        // It's already a number
-        correctIndex = parseInt(cAns, 10);
-      }
-      
-      var chFB = [ch1fb, ch2fb, ch3fb, ch4fb, ch5fb];
-      
-      for (var i = 0; i < choices.length; i++) {
-        if (!has(choices[i])) continue;
-        // i+1 because choices are 1-indexed in the CSV (1,2,3,4,5)
-        var isCorrect = (i + 1) === correctIndex;
-        var mark = isCorrect ? "[*]" : "[ ]";
-        var line = mark + " " + choices[i];
-        out.push(line);
-        if (has(chFB[i])) out.push("... " + chFB[i]);
-      }
-      out.push("");
-      continue;
-    }
-    
-    if (type === "TF") {
-      var tfChoices = [has(a1) ? a1 : "True", has(a2) ? a2 : "False"];
-      var tfCorrectIndex = parseInt(cAns, 10);
-      var tfFB = [ch1fb, ch2fb];
-      for (var j = 0; j < 2; j++) {
-        var ltr = String.fromCharCode(97 + j);
-        var marktf = (j + 1 === tfCorrectIndex) ? "*" : "";
-        out.push(marktf + ltr + ") " + tfChoices[j]);
-        if (has(tfFB[j])) out.push("... " + tfFB[j]);
-      }
-      out.push("");
-      continue;
-    }
-    
-    if (type === "MR") {
-      var mrChoices = [a1, a2, a3, a4, a5];
-      var mrfb = [ch1fb, ch2fb, ch3fb, ch4fb, ch5fb];
-      var correctSet = {};
-      if (has(cAns)) {
-        var parts = cAns.split(",");
-        for (var k = 0; k < parts.length; k++) {
-          var num = parseInt(parts[k].trim(), 10);
-          if (!isNaN(num)) correctSet[num - 1] = true;
-        }
-      }
-      for (var m = 0; m < mrChoices.length; m++) {
-        if (!has(mrChoices[m])) continue;
-        var markmr = correctSet[m] ? "[*]" : "[ ]";
-        out.push(markmr + " " + mrChoices[m]);
-        if (has(mrfb[m])) out.push("... " + mrfb[m]);
-      }
-      out.push("");
-      continue;
-    }
-    
-    if (type === "NUM") {
-      if (has(a1)) out.push("= " + a1);
-      out.push("");
-      continue;
-    }
-    
-    if (type === "SA") {
-      var sa = [a1, a2, a3, a4, a5];
-      for (var s = 0; s < sa.length; s++) {
-        if (has(sa[s])) out.push("* " + sa[s]);
-      }
-      out.push("");
-      continue;
-    }
-    
-    if (type === "ESSAY") {
-      out.push("####");
-      out.push("");
-      continue;
-    }
-    
-    if (type === "FILE") {
-      out.push("^^^^");
-      out.push("");
-      continue;
-    }
-  }
-  
-  // Close final group if one is still open
-  if (inGroup) {
-    out.push("END_GROUP");
-  }
-  
-  return out.join("\n");
-}
+  const aId  = 'assessment_' + Date.now();
+  const fname = aId + '.xml';
+  const aXml  = assessmentXML(title, '', settings, aId);
+  const mXml  = manifestXML(aId, fname);
 
-function downloadBlob(filename, text, mime) {
-  var blob = new Blob([text], {type: mime || "text/plain;charset=utf-8"});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement("a");
+  const zip = new JSZip();
+  zip.file('imsmanifest.xml', mXml);
+  zip.file(fname, aXml);
+
+  const blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
   a.href = url;
-  a.download = filename;
+  a.download = title.replace(/[^a-z0-9]/gi,'_').toLowerCase() + '_qti.zip';
   document.body.appendChild(a);
   a.click();
   URL.revokeObjectURL(url);
   a.remove();
+});
+
+// ─── Key Vault (hardcoded) ─────────────────────────────────────────────────────────────────────────
+const VAULT_URL       = 'https://script.google.com/macros/s/AKfycbxV6wnaoAjkhUXIdSz6w5kq_PwkMplJ7Z6kxDrDqCjrZVLwsoKrr-UdPEV7fQxVNb0Mpw/exec';
+const VAULT_TOKEN_KEY = 'qti_vault_token';
+
+function getVaultToken() { return (localStorage.getItem(VAULT_TOKEN_KEY) || '').trim(); }
+
+function vaultStatus(msg, type) {
+  const el = document.getElementById('vaultStatus');
+  el.style.display = 'block';
+  el.className = 'notice notice-' + (type || 'info');
+  el.innerHTML = msg;
+}
+function vaultStatusClear() {
+  document.getElementById('vaultStatus').style.display = 'none';
 }
 
-function generateTemplateCSV() {
-  var headers = [
-    "QuestionNumber","Group","GroupPick","GroupPointsPerQuestion",
-    "Type","Title","Points","Body",
-    "Answer1","Answer2","Answer3","Answer4","Answer5",
-    "Correct","GeneralFeedback","CorrectFeedback","IncorrectFeedback",
-    "Choice1Feedback","Choice2Feedback","Choice3Feedback","Choice4Feedback","Choice5Feedback",
-    "TextTitle","TextContent"
-  ];
-  var rows = [];
-  
-  // TEXT instructions, Chapter 1 group with random selection
-  rows.push([
-    "1","Chapter 1","2","3",
-    "TEXT","Read First","","",
-    "","","","","",
-    "","","","",
-    "","","","","",
-    "Instructions","Answer all questions carefully."
-  ]);
-  
-  // Chapter 1 questions (will pick 2 of these 3 randomly, each worth 3 points)
-  rows.push([
-    "2","Chapter 1","","",
-    "MC","Basic Addition","","What is 2 + 3?",
-    "6","1","5","10","",
-    "3","General feedback for this question.","Great job!","Check your addition.",
-    "6 is too high.","1 is too low.","Correct!","10 is not correct.","",
-    "",""
-  ]);
-  
-  rows.push([
-    "3","Chapter 1","","",
-    "TF","State of Water","","Water is liquid at room temperature.",
-    "True","False","","","",
-    "1","","","",
-    "Correct.","Incorrect.","","","",
-    "",""
-  ]);
-  
-  rows.push([
-    "4","Chapter 1","","",
-    "MC","Subtraction","","What is 10 - 7?",
-    "2","3","4","5","",
-    "2","","Good work!","Try again.",
-    "","Correct!","","","",
-    "",""
-  ]);
-  
-  // Chapter 2 group - all questions included with individual points
-  rows.push([
-    "5","Chapter 2","","",
-    "MR","Noble Gases","3","Which of the following are noble gases?",
-    "Oxygen","Helium","Neon","Nitrogen","Argon",
-    "2,3,5","Multiple correct answers.","Nice selection!","Review the periodic table.",
-    "Oxygen is not a noble gas.","Helium is a noble gas.","Neon is a noble gas.","Nitrogen is not a noble gas.","Argon is a noble gas.",
-    "",""
-  ]);
-  
-  rows.push([
-    "6","Chapter 2","","",
-    "NUM","Avogadro's Number","3","What is Avogadro's number (×10²³)?",
-    "6.022 +- 0.001","","","","",
-    "","Any value within the margin is accepted.","","",
-    "","","","","",
-    "",""
-  ]);
-  
-  // Lab Questions group - pick 1 random question worth 5 points
-  rows.push([
-    "7","Lab Questions","1","5",
-    "SA","Lab Safety Equipment","","What protective equipment covers your eyes in the lab?",
-    "goggles","safety goggles","safety glasses","protective goggles","eye protection",
-    "","Any of the listed answers earn full credit.","","",
-    "","","","","",
-    "",""
-  ]);
-  
-  rows.push([
-    "8","Lab Questions","","",
-    "ESSAY","Lab Safety Essay","","Write an essay about lab safety best practices.",
-    "","","","","",
-    "","","","",
-    "","","","","",
-    "",""
-  ]);
-  
-  rows.push([
-    "9","Lab Questions","","",
-    "FILE","Upload Lab Report","","Upload your completed lab report as a PDF.",
-    "","","","","",
-    "","","","",
-    "","","","","",
-    "",""
-  ]);
-  
-  // Question without a group (standalone)
-  rows.push([
-    "10","","","",
-    "TF","Chemical Safety","1","All chemicals should be treated as potentially hazardous.",
-    "True","False","","","",
-    "1","Safety first!","Correct!","Always treat chemicals with respect.",
-    "","","","","",
-    "",""
-  ]);
-  
-  var data = [headers].concat(rows).map(function(arr){ return arr.map(function(x){
-    var s = String(x === undefined ? "" : x);
-    if (s.indexOf('"') !== -1 || s.indexOf(",") !== -1 || s.indexOf("\n") !== -1) {
-      s = '"' + s.replace(/"/g,'""') + '"';
-    }
-    return s;
-  }).join(","); }).join("\n");
-  return data;
+// Called on first visit: walks user through saving a token
+async function firstTimeSetup() {
+  const token = prompt('First-time setup: Enter a secret token (12+ characters, make one up).');
+  if (!token || token.trim().length < 12) {
+    vaultStatus('&#9888; Token too short. Refresh the page to try again.', 'error');
+    return;
+  }
+  vaultStatus('<span class="spinner"></span> Saving token…', 'info');
+  try {
+    const res  = await fetch(VAULT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'saveToken', token: '', newToken: token.trim() })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Token save failed');
+    localStorage.setItem(VAULT_TOKEN_KEY, token.trim());
+    vaultStatus('&#9989; Token saved. Now enter your API key and click “Save Key” to store it.', 'success');
+    showSaveKeyPrompt();
+  } catch(err) {
+    vaultStatus('&#9888; ' + err.message, 'error');
+  }
 }
 
-var fileInput = document.getElementById("csvFile");
-var convertBtn = document.getElementById("convertBtn");
-var clearBtn = document.getElementById("clearBtn");
-var output = document.getElementById("output");
-var copyBtn = document.getElementById("copyBtn");
-var downloadTxtBtn = document.getElementById("downloadTxtBtn");
-var downloadTemplate = document.getElementById("downloadTemplate");
-
-convertBtn.addEventListener("click", function(){
-  if (!fileInput.files || fileInput.files.length === 0) {
-    alert("Please choose a CSV file first.");
+function showSaveKeyPrompt() {
+  const key = prompt('Enter your Anthropic API key (sk-ant-...) to save it to your Google Sheet:');
+  if (!key || !key.trim().startsWith('sk-ant-')) {
+    vaultStatus('&#9888; Invalid key. Refresh and try again.', 'error');
     return;
   }
-  var file = fileInput.files[0];
-  var reader = new FileReader();
-  reader.onload = function(e){
-    var text = e.target.result || "";
-    var rows = parseCSV(text);
-    var out = buildTextFromRows(rows);
-    output.value = out;
-    if (out.trim().length === 0) {
-      alert("No output produced. Check your headers and rows.");
+  saveKeyToVault(key.trim());
+}
+
+async function saveKeyToVault(key) {
+  const token = getVaultToken();
+  if (!token) { firstTimeSetup(); return; }
+  try {
+    const res  = await fetch(VAULT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'save', token, key })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Save failed');
+    document.getElementById('apiKey').value = key;
+    vaultStatus('&#9989; API key saved to your Google Sheet.', 'success');
+    setTimeout(vaultStatusClear, 3000);
+  } catch(err) {
+    vaultStatus('&#9888; ' + err.message, 'error');
+  }
+}
+
+// Auto-load key on every page open
+(async function initVault() {
+  const token = getVaultToken();
+  if (!token) {
+    // No token yet — first-time visitor
+    vaultStatus('&#128274; First-time setup required. <button class="btn btn-indigo btn-sm" style="margin-left:8px" onclick="firstTimeSetup()">Set Up Vault</button>', 'warn');
+    return;
+  }
+  vaultStatus('<span class="spinner"></span> Loading API key…', 'info');
+  try {
+    const res  = await fetch(VAULT_URL + '?action=get&token=' + encodeURIComponent(token));
+    const text = await res.text();
+    if (text.trim().startsWith('<')) throw new Error('Script returned HTML — check deployment settings.');
+    const data = JSON.parse(text);
+    if (!data.success) throw new Error(data.error || 'Load failed');
+    if (data.key) {
+      document.getElementById('apiKey').value = data.key;
+      vaultStatus('&#9989; API key loaded.', 'success');
+      setTimeout(vaultStatusClear, 2500);
+    } else {
+      vaultStatus('&#9888; No key stored yet. <button class="btn btn-indigo btn-sm" style="margin-left:8px" onclick="showSaveKeyPrompt()">Save Key Now</button>', 'warn');
     }
-  };
-  reader.readAsText(file);
-});
-
-clearBtn.addEventListener("click", function(){
-  fileInput.value = "";
-  output.value = "";
-});
-
-copyBtn.addEventListener("click", function(){
-  output.select();
-  document.execCommand("copy");
-  alert("Copied to clipboard.");
-});
-
-downloadTxtBtn.addEventListener("click", function(){
-  var text = output.value || "";
-  if (text.trim().length === 0) {
-    alert("No text to download.");
-    return;
+  } catch(err) {
+    vaultStatus('&#9888; Could not load key: ' + err.message, 'error');
   }
-  downloadBlob("quiz.txt", text, "text/plain;charset=utf-8");
-});
+})();
 
-downloadTemplate.addEventListener("click", function(){
-  var csv = generateTemplateCSV();
-  downloadBlob("canvas_quiz_template_with_groups_numbered.csv", csv, "text/csv;charset=utf-8");
-});
-
-document.getElementById("goToConverterBottom").addEventListener("click", function(){
-  window.open("https://site.nyit.edu/its/canvas_exam_converter", "_blank");
-});
 </script>
 </body>
 </html>
