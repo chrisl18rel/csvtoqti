@@ -522,11 +522,12 @@ Apply this to every formula, ion, charge, and equation in every question body, a
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'output-128k-2025-02-19',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
         model,
-        max_tokens: 8192,
+        max_tokens: 32000,
         system: SYS,
         messages: [{ role: 'user', content: msgContent }]
       })
@@ -551,11 +552,12 @@ Apply this to every formula, ion, charge, and equation in every question body, a
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'output-128k-2025-02-19',
           'anthropic-dangerous-direct-browser-access': 'true'
         },
         body: JSON.stringify({
           model,
-          max_tokens: 8192,
+          max_tokens: 32000,
           system: 'You are a JSON repair assistant. Return ONLY the valid JSON object from the input — no markdown fences, no explanation, nothing else.',
           messages: [{ role: 'user', content: 'Fix this and return only valid JSON:\n\n' + raw }]
         })
