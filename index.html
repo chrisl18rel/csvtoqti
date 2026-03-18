@@ -176,6 +176,19 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
 
 </div>
 
+<!-- Image picker slide-in panel -->
+<div id="imgPickerOverlay" style="display:none;position:fixed;inset:0;background:rgba(32,29,82,.45);z-index:1000;backdrop-filter:blur(2px)" onclick="closeImgPicker()"></div>
+<div id="imgPickerPanel" style="display:none;position:fixed;top:0;right:0;width:360px;height:100vh;background:#fff;z-index:1001;box-shadow:-8px 0 32px rgba(32,29,82,.18);overflow-y:auto;padding:24px;box-sizing:border-box;transition:transform .25s">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <h3 style="margin:0;font-size:16px;font-weight:700;color:#201D52">Select Image</h3>
+    <button onclick="closeImgPicker()" style="background:none;border:none;cursor:pointer;font-size:22px;color:#666;line-height:1">&times;</button>
+  </div>
+  <p id="imgPickerSubtitle" style="font-size:13px;color:#555;margin:0 0 14px"></p>
+  <button onclick="removeImgFromQuestion()" class="btn btn-red btn-sm" style="width:100%;margin-bottom:14px;justify-content:center">&#128465; Remove Image from This Question</button>
+  <div id="imgPickerGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+  <p id="imgPickerEmpty" style="display:none;font-size:13px;color:#888;text-align:center;margin-top:24px">No images were extracted from this document.</p>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -443,9 +456,10 @@ Rules for each type — always fill "correct" and "suggested_answer" to the best
   • suggested_answer = "True" or "False"
 
 - NUM = numerical answer.
-  • answers = [a tight bounding range that perfectly brackets the exact correct answer, formatted as "[min, max]" — use E-notation for scientific notation (e.g. if the answer is 6.022×10²³ use "[6.020E23, 6.024E23]", if the answer is 1.5×10⁻¹⁰ use "[1.499E-10, 1.501E-10]", if the answer is 273.15 use "[273.14, 273.16]"). Students will type answers like 6.02E23, so the range must match that format. Make the range just wide enough to accept rounding to the expected sig figs.]
+  SIGNIFICANT FIGURES ARE MANDATORY: Before computing the answer, identify the number of significant figures in every given value. The answer must be rounded to match the FEWEST sig figs in any given value. Examples: 7.2 × 10⁻⁸ has 2 sig figs → answer rounded to 2 sig figs. 1.38 × 10⁻²³ has 3 sig figs. 6.022 × 10²³ has 4 sig figs. Trailing zeros after a decimal count (1.50 = 3 sig figs). Leading zeros never count (0.0072 = 2 sig figs). Integers given without decimal (e.g. pH = 14) are exact and do not limit sig figs.
+  • answers = [a tight bounding range bracketing the sig-fig-rounded answer, formatted as "[min, max]" — use E-notation for scientific notation (e.g. "[6.8, 7.0]" for a 2-sig-fig answer of 6.9, or "[6.020E23, 6.024E23]" for 6.022×10²³). Students type answers like 6.02E23 or 6.9, so the range must match that format. Make the range just wide enough to accept rounding to the correct sig figs.]
   • correct = [] (leave empty, the range in answers[0] is the answer)
-  • suggested_answer = the exact correct numerical value with units, using Unicode superscripts for display (e.g. "6.022 × 10²³ mol⁻¹")
+  • suggested_answer = the sig-fig-correct answer with units and a brief note, e.g. "6.9 (2 sig figs, from 7.2 × 10⁻⁸)" or "6.022 × 10²³ mol⁻¹ (4 sig figs)".
 
 - SA  = single fill-in-the-blank (student types one free-text answer).
   • answers = list of acceptable answer strings (include common variations, abbreviations, and alternate spellings)
@@ -711,12 +725,16 @@ function buildEditForm(q) {
       <strong>🤖 AI Suggested Answer:</strong> ${esc(q.suggested_answer)}
       <span style="font-size:12px;opacity:.75;margin-left:8px">(for your reference — not exported to Canvas)</span>
     </div>` : ''}
-    ${q.image_ref && extractedImages[q.image_ref] ? `<div style="margin-top:10px">
+    <div style="margin-top:10px">
       <label>Associated Image</label>
-      <img src="data:${extractedImages[q.image_ref].mime};base64,${extractedImages[q.image_ref].data}"
-           style="max-width:100%;max-height:280px;border-radius:8px;border:1.5px solid #e0e0f0;display:block">
-      <div style="font-size:11px;color:#888;margin-top:4px">Key: ${q.image_ref} — will be embedded in QTI ZIP</div>
-    </div>` : ''}
+      ${q.image_ref && extractedImages[q.image_ref] ? `
+        <img src="data:${extractedImages[q.image_ref].mime};base64,${extractedImages[q.image_ref].data}"
+             id="qimg-${q.id}"
+             style="max-width:100%;max-height:220px;border-radius:8px;border:2px solid #6465F1;display:block;margin-bottom:8px">
+        <div style="font-size:11px;color:#888;margin-bottom:8px">Key: ${q.image_ref}</div>` : `
+        <div style="background:#f4f4fc;border:1.5px dashed #c8c8ea;border-radius:8px;padding:14px;font-size:13px;color:#888;margin-bottom:8px;text-align:center">No image associated</div>`}
+      <button class="btn btn-navy btn-sm" onclick="openImgPicker(${q.id})" style="width:100%;justify-content:center">&#128444; ${q.image_ref && extractedImages[q.image_ref] ? 'Change Image' : 'Add Image from Document'}</button>
+    </div>
     <hr class="soft">
     <div class="row2">
       <div>
@@ -1066,6 +1084,69 @@ function vaultStatusClear() {
     vaultStatus('⚠️ Could not load key: ' + err.message, 'error');
   }
 })();
+
+// ─── Image Picker Panel ────────────────────────────────────────────────────────
+let imgPickerTargetId = null;
+
+function openImgPicker(qId) {
+  imgPickerTargetId = qId;
+  const q   = getQ(qId);
+  const sub = document.getElementById('imgPickerSubtitle');
+  sub.textContent = 'Question: ' + (q ? q.body.substring(0, 60) + (q.body.length > 60 ? '…' : '') : '');
+
+  const grid  = document.getElementById('imgPickerGrid');
+  const empty = document.getElementById('imgPickerEmpty');
+  grid.innerHTML = '';
+
+  const keys = Object.keys(extractedImages);
+  if (!keys.length) {
+    empty.style.display = 'block';
+    grid.style.display  = 'none';
+  } else {
+    empty.style.display = 'none';
+    grid.style.display  = 'grid';
+    keys.forEach(key => {
+      const im      = extractedImages[key];
+      const isActive = q && q.image_ref === key;
+      const cell    = document.createElement('div');
+      cell.style.cssText = 'border:2px solid ' + (isActive ? '#6465F1' : '#e0e0f0') + ';border-radius:10px;overflow:hidden;cursor:pointer;transition:border-color .15s;background:#fafafe';
+      cell.onclick = () => assignImgToQuestion(key);
+      cell.innerHTML = `
+        <img src="data:${im.mime};base64,${im.data}" style="width:100%;height:110px;object-fit:contain;display:block;padding:4px;box-sizing:border-box">
+        <div style="font-size:10px;color:#555;padding:4px 6px;text-align:center;font-family:monospace;word-break:break-all">${key}${im.page ? ' (p'+im.page+')' : ''}</div>
+        ${isActive ? '<div style="background:#6465F1;color:#fff;font-size:10px;text-align:center;padding:3px;font-weight:700">✓ Current</div>' : ''}
+      `;
+      grid.appendChild(cell);
+    });
+  }
+
+  document.getElementById('imgPickerOverlay').style.display = 'block';
+  document.getElementById('imgPickerPanel').style.display   = 'block';
+}
+
+function closeImgPicker() {
+  document.getElementById('imgPickerOverlay').style.display = 'none';
+  document.getElementById('imgPickerPanel').style.display   = 'none';
+  imgPickerTargetId = null;
+}
+
+function assignImgToQuestion(key) {
+  const q = getQ(imgPickerTargetId);
+  if (!q) return;
+  q.image_ref = key;
+  closeImgPicker();
+  reRenderCard(imgPickerTargetId);
+  toggleEdit(imgPickerTargetId);
+}
+
+function removeImgFromQuestion() {
+  const q = getQ(imgPickerTargetId);
+  if (!q) return;
+  q.image_ref = '';
+  closeImgPicker();
+  reRenderCard(imgPickerTargetId);
+  toggleEdit(imgPickerTargetId);
+}
 
 </script>
 </body>
