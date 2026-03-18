@@ -140,7 +140,33 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
     </div>
     <label for="quizDesc">Description (optional)</label>
     <textarea id="quizDesc" placeholder="Optional description shown to students"></textarea>
-    <label>Quiz Behavior</label>
+    <div class="row2" style="margin-bottom:0">
+      <div>
+        <label for="accessCode">Access Code <span style="font-weight:400;color:#888">(optional — students must enter this to begin)</span></label>
+        <input type="text" id="accessCode" placeholder="Leave blank for no access code" style="margin-bottom:0">
+      </div>
+      <div></div>
+    </div>
+    <hr class="soft" style="margin-top:16px">
+    <label style="margin-bottom:8px;display:block">Availability &amp; Due Dates <span style="font-weight:400;color:#888">(optional)</span></label>
+    <div class="row2" style="margin-bottom:12px">
+      <div>
+        <label for="dateAvailFrom">Available From</label>
+        <input type="datetime-local" id="dateAvailFrom" style="margin-bottom:0">
+      </div>
+      <div>
+        <label for="dateDue">Due Date</label>
+        <input type="datetime-local" id="dateDue" style="margin-bottom:0">
+      </div>
+    </div>
+    <div class="row2" style="margin-bottom:14px">
+      <div>
+        <label for="dateAvailUntil">Available Until</label>
+        <input type="datetime-local" id="dateAvailUntil" style="margin-bottom:0">
+      </div>
+      <div></div>
+    </div>
+    <label style="margin-top:0">Quiz Behavior</label>
     <div class="check-group">
       <label><input type="checkbox" id="shuffleAns"> Shuffle answer order</label>
       <label><input type="checkbox" id="showCorrect"> Show correct answers after submission</label>
@@ -609,6 +635,10 @@ Apply this to every formula, ion, charge, and equation in every question body, a
     }));
 
     if (parsed.suggested_title) document.getElementById('quizTitle').value = parsed.suggested_title;
+
+    // Auto-set default points: 100 / question count, rounded to nearest hundredth
+    const autoPts = Math.round((100 / extracted.length) * 100) / 100;
+    document.getElementById('defaultPts').value = autoPts;
     extractedImages = content.images || {};
 
     setStatus('✅ Extracted ' + questions.length + ' question' + (questions.length !== 1 ? 's' : '') + ' from "' + selectedFile.name + '"', 'done');
@@ -974,7 +1004,11 @@ function assessmentXML(title, desc, settings, aId, imageMap) {
   if (settings.shuffle) meta.push('<qtimetadatafield><fieldlabel>shuffle_answers</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
   if (settings.showCorrect) meta.push('<qtimetadatafield><fieldlabel>show_correct_answers</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
   if (settings.oneAtTime) meta.push('<qtimetadatafield><fieldlabel>one_question_at_a_time</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
-  if (settings.cantGoBack) meta.push('<qtimetadatafield><fieldlabel>cant_go_back</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
+  if (settings.cantGoBack)  meta.push('<qtimetadatafield><fieldlabel>cant_go_back</fieldlabel><fieldentry>true</fieldentry></qtimetadatafield>');
+  if (settings.accessCode)  meta.push('<qtimetadatafield><fieldlabel>access_code</fieldlabel><fieldentry>' + settings.accessCode + '</fieldentry></qtimetadatafield>');
+  if (settings.availFrom)   meta.push('<qtimetadatafield><fieldlabel>available_date</fieldlabel><fieldentry>' + new Date(settings.availFrom).toISOString() + '</fieldentry></qtimetadatafield>');
+  if (settings.dueDate)     meta.push('<qtimetadatafield><fieldlabel>due_at</fieldlabel><fieldentry>' + new Date(settings.dueDate).toISOString() + '</fieldentry></qtimetadatafield>');
+  if (settings.availUntil)  meta.push('<qtimetadatafield><fieldlabel>lock_at</fieldlabel><fieldentry>' + new Date(settings.availUntil).toISOString() + '</fieldentry></qtimetadatafield>');
 
   const items = questions.map((q,i) => itemXML(q, i+1, imageMap)).join('\n');
 
@@ -1017,10 +1051,14 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
 
   const title = document.getElementById('quizTitle').value.trim() || 'Quiz';
   const settings = {
-    shuffle:    document.getElementById('shuffleAns').checked,
-    showCorrect:document.getElementById('showCorrect').checked,
-    oneAtTime:  document.getElementById('oneAtTime').checked,
-    cantGoBack: document.getElementById('cantGoBack').checked
+    shuffle:      document.getElementById('shuffleAns').checked,
+    showCorrect:  document.getElementById('showCorrect').checked,
+    oneAtTime:    document.getElementById('oneAtTime').checked,
+    cantGoBack:   document.getElementById('cantGoBack').checked,
+    accessCode:   document.getElementById('accessCode').value.trim(),
+    availFrom:    document.getElementById('dateAvailFrom').value,
+    dueDate:      document.getElementById('dateDue').value,
+    availUntil:   document.getElementById('dateAvailUntil').value
   };
 
   const aId     = 'assessment_' + Date.now();
