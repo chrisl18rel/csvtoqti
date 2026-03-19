@@ -123,9 +123,7 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
     <div>
       <label for="modelSel">Model</label>
       <select id="modelSel" style="max-width:360px">
-        <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — Recommended</option>
-        <option value="claude-opus-4-6">Claude Opus 4.6 — Most Capable</option>
-        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 — Fastest</option>
+        <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
       </select>
     </div>
     <!-- hidden inputs still needed by JS -->
@@ -759,9 +757,18 @@ function buildEditForm(q) {
   if (!['ESSAY','FILE'].includes(q.type)) {
     if (q.type === 'NUM') {
       answersHtml = `
-        <label>Numerical Answer Rule</label>
-        <input type="text" placeholder="e.g.  5   or   5 +- 0.1   or   [4.9, 5.1]   or   100 +- 5%"
-          value="${esc(q.answers[0]||'')}" oninput="getQ(${q.id}).answers[0]=this.value">`;
+        <label>Canvas Answer Rule <span style="font-weight:400;color:#888;font-size:12px">(range sent to Canvas — edit directly or use the updater below)</span></label>
+        <input type="text" id="numRule-${q.id}" placeholder="e.g. [4.9, 5.1] or 5 +- 0.1"
+          value="${esc(q.answers[0]||'')}" oninput="getQ(${q.id}).answers[0]=this.value">
+        <div style="background:#f0f7ff;border:1.5px solid #bdd6f5;border-radius:10px;padding:12px;margin-top:2px">
+          <label style="color:#1e40af;margin-bottom:6px">🔢 Exact Answer Updater — enter the correct value and click Update to recalculate the bounding range</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="numExact-${q.id}" placeholder="Enter exact answer  e.g.  6.022e23  or  273.15  or  -40"
+              style="margin-bottom:0;flex:1" onkeydown="if(event.key==='Enter')updateNumBounds(${q.id})">
+            <button class="btn btn-green btn-sm" onclick="updateNumBounds(${q.id})">Update Bounds</button>
+          </div>
+          <div id="numPreview-${q.id}" style="font-size:12px;color:#1e40af;margin-top:6px;display:none"></div>
+        </div>`;
     } else if (q.type === 'SA') {
       answersHtml = `
         <label>Acceptable Answers — one per line</label>
@@ -986,6 +993,66 @@ document.getElementById('removeFeedbackBtn').addEventListener('click', () => {
   renderAllQuestions();
   saveSession();
 });
+
+// ─── Numerical Bounds Updater ───────────────────────────────────────────────────────────────────────
+function updateNumBounds(id) {
+  const raw = (document.getElementById('numExact-' + id).value || '').trim();
+  if (!raw) return;
+
+  // Parse the value — support plain numbers and scientific notation like 6.022e23
+  const val = parseFloat(raw.replace(/×\s*10\^?/i, 'e').replace(/×/g,''));
+  if (isNaN(val)) {
+    document.getElementById('numPreview-' + id).style.display = 'block';
+    document.getElementById('numPreview-' + id).innerHTML = '⚠️ Could not parse that value. Use digits only, e.g. 6.022e23 or 273.15';
+    return;
+  }
+
+  // Determine sig figs from the input string (count significant digits)
+  const sigFigs = countSigFigs(raw);
+
+  // Calculate a tight bounding range based on the last significant digit
+  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.abs(val))) - (sigFigs - 1));
+  const half = magnitude * 0.5;
+  let lo = val - half;
+  let hi = val + half;
+
+  // For very large or very small numbers use scientific notation in the rule
+  const useExp = Math.abs(val) >= 1e6 || (Math.abs(val) < 0.01 && val !== 0);
+  const fmt = n => {
+    if (useExp) return n.toExponential(sigFigs + 1);
+    // Round to avoid floating-point noise
+    const decimals = Math.max(0, sigFigs - Math.floor(Math.log10(Math.abs(val))) - 1);
+    return n.toFixed(decimals + 1);
+  };
+
+  const rule = '[' + fmt(lo) + ', ' + fmt(hi) + ']';
+
+  // Update state and UI
+  const q = getQ(id);
+  if (q) q.answers[0] = rule;
+  const ruleInput = document.getElementById('numRule-' + id);
+  if (ruleInput) ruleInput.value = rule;
+
+  const preview = document.getElementById('numPreview-' + id);
+  preview.style.display = 'block';
+  preview.innerHTML = '✅ Bounds set to <strong>' + rule + '</strong> &nbsp;&mdash;&nbsp; accepts answers within ½ of the last significant digit of ' + raw;
+}
+
+function countSigFigs(s) {
+  // Strip leading sign and spaces
+  s = s.trim().replace(/^[+-]/, '');
+  // Handle scientific notation: count sig figs in mantissa only
+  const eIdx = s.toLowerCase().indexOf('e');
+  if (eIdx !== -1) s = s.substring(0, eIdx);
+  // Remove decimal point
+  const noDecimal = s.replace('.', '');
+  // Strip leading zeros
+  const stripped = noDecimal.replace(/^0+/, '');
+  // Strip trailing zeros if no decimal point in original
+  const hasDot = s.includes('.');
+  const cleaned = hasDot ? stripped : stripped.replace(/0+$/, '');
+  return Math.max(1, cleaned.length);
+}
 
 // ─── QTI XML Generation ────────────────────────────────────────────────────────
 function numCondition(rule) {
