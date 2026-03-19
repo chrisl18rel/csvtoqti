@@ -270,10 +270,18 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
     <h3 style="margin:0;font-size:16px;font-weight:700;color:#201D52">Select Image</h3>
     <button onclick="closeImgPicker()" style="background:none;border:none;cursor:pointer;font-size:22px;color:#666;line-height:1">&times;</button>
   </div>
-  <p id="imgPickerSubtitle" style="font-size:13px;color:#555;margin:0 0 14px"></p>
-  <button onclick="removeImgFromQuestion()" class="btn btn-red btn-sm" style="width:100%;margin-bottom:14px;justify-content:center">&#128465; Remove Image from This Question</button>
+  <p id="imgPickerSubtitle" style="font-size:13px;color:#555;margin:0 0 10px"></p>
+  <button onclick="removeImgFromQuestion()" class="btn btn-red btn-sm" style="width:100%;margin-bottom:12px;justify-content:center">&#128465; Remove Image from This Question</button>
+
+  <div style="background:#f0f7ff;border:1.5px solid #bdd6f5;border-radius:10px;padding:11px 13px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:6px">&#128444; Upload an image from your computer</div>
+    <input type="file" id="imgUploadInput" accept="image/*" style="font-size:12px;width:100%;margin-bottom:0"
+      onchange="handleImgUpload(this)">
+  </div>
+
+  <div style="font-size:12px;font-weight:700;color:#444;margin-bottom:8px">Or choose from extracted document images:</div>
   <div id="imgPickerGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
-  <p id="imgPickerEmpty" style="display:none;font-size:13px;color:#888;text-align:center;margin-top:24px">No images were extracted from this document.</p>
+  <p id="imgPickerEmpty" style="display:none;font-size:13px;color:#888;text-align:center;margin-top:12px">No images were auto-extracted from this document. Use the upload option above.</p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -1176,6 +1184,14 @@ function assessmentXML(title, desc, settings, aId, imageMap) {
 }
 
 function manifestXML(aId, filename, imageKeys) {
+  // Each image used in the quiz must be declared as a <file> dependency
+  // so Canvas knows to serve it when the question renders.
+  const imgFileTags = (imageKeys || []).map(key => {
+    const im  = extractedImages[key];
+    const ext = (im && im.mime) ? im.mime.split('/')[1] || 'png' : 'png';
+    return '      <file href="images/' + key + '.' + ext + '"/>';
+  }).join('\n');
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <manifest identifier="man_${aId}"
   xmlns="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1"
@@ -1186,6 +1202,7 @@ function manifestXML(aId, filename, imageKeys) {
   <resources>
     <resource identifier="res_${aId}" type="imsqti_xmlv1p2" href="${filename}">
       <file href="${filename}"/>
+${imgFileTags}
     </resource>
   </resources>
 </manifest>`;
@@ -1342,6 +1359,25 @@ function removeImgFromQuestion() {
   const editEl = document.getElementById('edit-' + savedId);
   if (editEl) editEl.classList.add('open');
   saveSession();
+}
+
+function handleImgUpload(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const mime = file.type || 'image/png';
+  const ext  = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+  reader.onload = e => {
+    const b64 = e.target.result.split(',')[1];
+    // Generate a unique key for the uploaded image
+    const key = 'upload_' + String(Object.keys(extractedImages).length + 1).padStart(3, '0');
+    extractedImages[key] = { data: b64, mime, originalName: file.name };
+    // Immediately assign to the question and close
+    assignImgToQuestion(key);
+    // Reset the input so the same file can be re-selected if needed
+    input.value = '';
+  };
+  reader.readAsDataURL(file);
 }
 
 // ─── Session Persistence (survives refresh, clears on tab close) ───────────────
