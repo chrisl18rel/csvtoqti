@@ -1178,10 +1178,11 @@ function assignImgToQuestion(key) {
   const q = getQ(imgPickerTargetId);
   if (!q) return;
   q.image_ref = key;
-  const savedId = imgPickerTargetId;  // capture before closeImgPicker nulls it
+  const savedId = imgPickerTargetId;
   closeImgPicker();
   reRenderCard(savedId);
-  toggleEdit(savedId);
+  const editEl = document.getElementById('edit-' + savedId);
+  if (editEl) editEl.classList.add('open');
   saveSession();
 }
 
@@ -1192,7 +1193,8 @@ function removeImgFromQuestion() {
   const savedId = imgPickerTargetId;
   closeImgPicker();
   reRenderCard(savedId);
-  toggleEdit(savedId);
+  const editEl = document.getElementById('edit-' + savedId);
+  if (editEl) editEl.classList.add('open');
   saveSession();
 }
 
