@@ -76,11 +76,45 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
 <body>
 
 <div class="header">
-  <h1>🧪 AI Quiz Extractor → Canvas QTI</h1>
-  <p>Upload a PDF, Word doc, or text file. Claude reads your questions and builds a QTI .zip you import directly into Canvas — no converter site needed.</p>
+  <h1>🧪 Batch Genie - AI Quiz Extractor for Canvas</h1>
 </div>
 
 <div class="container">
+
+  <!-- INSTRUCTIONS CARD -->
+  <div class="card" style="background:linear-gradient(135deg,#201D52 0%,#3a2875 100%);border:none;color:#fff">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <h2 style="margin:0;font-size:18px;font-weight:700;color:#fff">How to Use Batch Genie</h2>
+      <span style="background:rgba(255,255,255,0.15);color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.5px">QUICK START</span>
+    </div>
+    <p style="font-size:13px;opacity:.8;margin:0 0 18px">Turn any quiz document into a Canvas-ready QTI zip in minutes — no manual entry required.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+      <div style="background:rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start">
+        <span style="background:#6465F1;border-radius:8px;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px">1</span>
+        <div><div style="font-weight:700;font-size:13px;margin-bottom:2px">API Ready</div><div style="font-size:12px;opacity:.75">Your key loads automatically from your Google Sheet vault on every visit.</div></div>
+      </div>
+      <div style="background:rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start">
+        <span style="background:#6465F1;border-radius:8px;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px">2</span>
+        <div><div style="font-weight:700;font-size:13px;margin-bottom:2px">Upload &amp; Extract</div><div style="font-size:12px;opacity:.75">Drop in a PDF, .docx, .txt, or .md file. Set preferences and click Extract.</div></div>
+      </div>
+      <div style="background:rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start">
+        <span style="background:#6465F1;border-radius:8px;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px">3</span>
+        <div><div style="font-weight:700;font-size:13px;margin-bottom:2px">Review &amp; Edit</div><div style="font-size:12px;opacity:.75">Fix answers, swap images, adjust points, and configure quiz settings.</div></div>
+      </div>
+      <div style="background:rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start">
+        <span style="background:#8F37EB;border-radius:8px;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px">4</span>
+        <div><div style="font-weight:700;font-size:13px;margin-bottom:2px">Export or Save</div><div style="font-size:12px;opacity:.75"><strong style="opacity:1">Download QTI</strong> to import into Canvas, or <strong style="opacity:1">Save Session</strong> to resume later.</div></div>
+      </div>
+      <div style="background:rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start">
+        <span style="background:#8F37EB;border-radius:8px;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px">5</span>
+        <div><div style="font-weight:700;font-size:13px;margin-bottom:2px">Import to Canvas</div><div style="font-size:12px;opacity:.75">Course Settings → Import Course Content → QTI .zip file → Import.</div></div>
+      </div>
+      <div style="background:rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start">
+        <span style="background:#059669;border-radius:8px;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px">↩</span>
+        <div><div style="font-weight:700;font-size:13px;margin-bottom:2px">Resume Anytime</div><div style="font-size:12px;opacity:.75">Load a saved session zip to pick up exactly where you left off.</div></div>
+      </div>
+    </div>
+  </div>
 
   <!-- STEP 1: API CONFIG -->
   <div class="card">
@@ -1439,5 +1473,8 @@ async function loadWorkbenchZip(input) {
 }
 
 </script>
+<footer style="text-align:center;padding:28px 16px;font-size:12px;color:#888;border-top:1px solid #e0e0f0;margin-top:12px">
+  Created by <strong style="color:#201D52">Chris Leatherwood</strong> &mdash; Tyler, TX &nbsp;|&nbsp; &copy; 2025&ndash;2026
+</footer>
 </body>
 </html>
