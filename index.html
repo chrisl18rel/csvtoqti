@@ -565,18 +565,28 @@ Rules for each type — always fill "correct" and "suggested_answer" to the best
   • correct = [] (leave empty)
   • suggested_answer = the primary canonical correct answer
 
-- FIB = fill-in-MULTIPLE-blanks (student picks from a dropdown per blank — like matching).
-  Use this when a sentence or paragraph has 2 or more blank spaces that need separate answers.
-  • body = the question text with [blank_id] markers using descriptive names, e.g.:
-    "The [particle_blank] has a positive charge and lives in the [location_blank]."
-  • fib_blanks = object where each key is a blank_id and value has:
-      "correct": the correct answer string
-      "choices": array of 3-5 choices including the correct one (plausible distractors)
-    Example: { "particle_blank": { "correct": "proton", "choices": ["proton","electron","neutron","photon"] },
-               "location_blank": { "correct": "nucleus", "choices": ["nucleus","orbital","valence shell","electron cloud"] } }
+- FIB = fill-in-MULTIPLE-blanks — REQUIRED any time a question asks for TWO OR MORE separate answers.
+  This includes (but is not limited to):
+    • "Find the pH AND the pOH"
+    • "Calculate the molarity AND the moles"
+    • "Identify the acid AND its conjugate base"
+    • Any question with "and" or "both" that requires separate calculated or identified values
+  Each separate answer gets its own blank. Do NOT collapse multi-part questions into a single NUM or SA.
+  • body = the question text with [blank_id] markers, one per required answer, using descriptive snake_case names.
+    Example: "What is the pH [ph_blank] and pOH [poh_blank] of this solution?"
+  • fib_blanks = object where each key is a blank_id. For NUMERICAL blanks include the correct numeric value
+    and 3–4 plausible wrong numeric answers as choices. For CONCEPTUAL blanks include the correct word/phrase
+    and 3–4 plausible distractors as choices.
+    NUMERICAL choices MUST use scientific notation in the format Canvas expects: e.g. "2.44", "11.56", "1.0E-3", "6.02E-4"
+    — no Unicode superscripts in choice values, plain decimal or E-notation only.
+    Example for pH/pOH question:
+    { "ph_blank":  { "correct": "2.44",  "choices": ["2.44",  "11.56", "3.12",  "1.44"]  },
+      "poh_blank": { "correct": "11.56", "choices": ["11.56", "2.44",  "10.88", "12.56"] } }
   • answers = [] (leave empty)
   • correct = [] (leave empty)
-  • suggested_answer = "blank1: answer1, blank2: answer2" listing each blank's answer
+  • suggested_answer = one line per blank: "ph_blank: 2.44, poh_blank: 11.56"
+  
+  RULE: If a question explicitly asks for two or more numerical results, it MUST be FIB, not NUM.
 
 - ESSAY = open response requiring written explanation.
   • answers = [] (leave empty)
