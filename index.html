@@ -648,6 +648,7 @@ Apply this to every formula, ion, charge, and equation in every question body, a
     updateQCount();
     ['settingsCard','questionsCard','exportCard'].forEach(show);
     document.getElementById('settingsCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    saveSession();
 
   } catch(err) {
     setStatus('⚠ ' + err.message, 'error');
@@ -788,6 +789,7 @@ function deleteQ(id) {
   document.getElementById('qcard-'+id).remove();
   renumber();
   updateQCount();
+  saveSession();
 }
 
 function renumber() {
@@ -808,6 +810,7 @@ function changeType(id, type) {
   if (type === 'FIB') { q.answers = []; q.fib_blanks = {}; }
   reRenderCard(id);
   toggleEdit(id);
+  saveSession();
 }
 
 // ─── FIB Edit Helpers ──────────────────────────────────────────────────────────
@@ -895,6 +898,7 @@ document.getElementById('addQBtn').addEventListener('click', () => {
   ['settingsCard','questionsCard','exportCard'].forEach(show);
   toggleEdit(q.id);
   card.scrollIntoView({ behavior:'smooth', block:'start' });
+  saveSession();
 });
 
 document.getElementById('collapseAllBtn').addEventListener('click', () => {
@@ -1121,6 +1125,8 @@ function vaultStatusClear() {
   } catch(err) {
     vaultStatus('⚠️ Could not load key: ' + err.message, 'error');
   }
+  // After vault loads, restore any saved session
+  loadSession();
 })();
 
 // ─── Image Picker Panel ────────────────────────────────────────────────────────
@@ -1172,19 +1178,100 @@ function assignImgToQuestion(key) {
   const q = getQ(imgPickerTargetId);
   if (!q) return;
   q.image_ref = key;
+  const savedId = imgPickerTargetId;  // capture before closeImgPicker nulls it
   closeImgPicker();
-  reRenderCard(imgPickerTargetId);
-  toggleEdit(imgPickerTargetId);
+  reRenderCard(savedId);
+  toggleEdit(savedId);
+  saveSession();
 }
 
 function removeImgFromQuestion() {
   const q = getQ(imgPickerTargetId);
   if (!q) return;
   q.image_ref = '';
+  const savedId = imgPickerTargetId;
   closeImgPicker();
-  reRenderCard(imgPickerTargetId);
-  toggleEdit(imgPickerTargetId);
+  reRenderCard(savedId);
+  toggleEdit(savedId);
+  saveSession();
 }
+
+// ─── Session Persistence (survives refresh, clears on tab close) ───────────────
+const SESSION_Q_KEY   = 'qti_session_questions';
+const SESSION_IMG_KEY = 'qti_session_images';
+const SESSION_META_KEY = 'qti_session_meta';
+
+function saveSession() {
+  try {
+    sessionStorage.setItem(SESSION_Q_KEY, JSON.stringify(questions));
+    // Images can be large — try to store, silently skip if over quota
+    try {
+      sessionStorage.setItem(SESSION_IMG_KEY, JSON.stringify(extractedImages));
+    } catch(e) {
+      console.warn('Session image save skipped (too large for sessionStorage):', e.message);
+    }
+    const meta = {
+      title:      document.getElementById('quizTitle').value,
+      desc:       document.getElementById('quizDesc').value,
+      defaultPts: document.getElementById('defaultPts').value,
+      fileName:   document.getElementById('chosenFileName').textContent
+    };
+    sessionStorage.setItem(SESSION_META_KEY, JSON.stringify(meta));
+  } catch(e) {
+    console.warn('Session save failed:', e.message);
+  }
+}
+
+function loadSession() {
+  try {
+    const qRaw   = sessionStorage.getItem(SESSION_Q_KEY);
+    const imgRaw = sessionStorage.getItem(SESSION_IMG_KEY);
+    const metaRaw= sessionStorage.getItem(SESSION_META_KEY);
+    if (!qRaw) return false;
+
+    questions = JSON.parse(qRaw);
+    if (imgRaw) extractedImages = JSON.parse(imgRaw);
+    if (metaRaw) {
+      const meta = JSON.parse(metaRaw);
+      if (meta.title)      document.getElementById('quizTitle').value    = meta.title;
+      if (meta.desc)       document.getElementById('quizDesc').value     = meta.desc;
+      if (meta.defaultPts) document.getElementById('defaultPts').value   = meta.defaultPts;
+      if (meta.fileName)   document.getElementById('chosenFileName').textContent = meta.fileName;
+    }
+
+    // Bump nextId past all restored ids so new questions don't collide
+    const maxId = questions.reduce((m, q) => Math.max(m, q.id), 0);
+    nextId = maxId + 1;
+
+    renderAllQuestions();
+    updateQCount();
+    const imgCount = Object.keys(extractedImages).length;
+    document.getElementById('extractSummary').innerHTML =
+      '<strong>' + questions.length + ' questions restored from last session</strong>' +
+      (imgCount ? ' · ' + imgCount + ' image(s) available' : '') +
+      ' — <a href="#" onclick="clearSession();return false;" style="color:#dc3545">Clear session</a>';
+    ['settingsCard','questionsCard','exportCard'].forEach(show);
+    return true;
+  } catch(e) {
+    console.warn('Session restore failed:', e.message);
+    return false;
+  }
+}
+
+function clearSession() {
+  sessionStorage.removeItem(SESSION_Q_KEY);
+  sessionStorage.removeItem(SESSION_IMG_KEY);
+  sessionStorage.removeItem(SESSION_META_KEY);
+  questions = [];
+  extractedImages = {};
+  nextId = 1;
+  document.getElementById('questionList').innerHTML = '';
+  document.getElementById('chosenFileName').textContent = '';
+  updateQCount();
+  ['settingsCard','questionsCard','exportCard'].forEach(hide);
+}
+
+// Auto-save whenever questions array changes — hook into key mutation points
 
 </script>
 </body>
