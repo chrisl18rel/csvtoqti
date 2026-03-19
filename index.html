@@ -651,7 +651,10 @@ Apply this to every formula, ion, charge, and equation in every question body, a
       return;
     }
 
-    const pts = parseFloat(document.getElementById('defaultPts').value) || 1;
+    // Calculate per-question points from 100/count BEFORE mapping questions
+    const autoPts = Math.round((100 / extracted.length) * 100) / 100;
+    document.getElementById('defaultPts').value = autoPts;
+    const pts = autoPts;
     questions = extracted.map(q => ({
       id: nextId++,
       type: TYPES.includes(q.type) ? q.type : 'MC',
@@ -667,9 +670,6 @@ Apply this to every formula, ion, charge, and equation in every question body, a
     }));
 
     if (parsed.suggested_title) document.getElementById('quizTitle').value = parsed.suggested_title;
-
-    // Auto-calc Card 3 display field: 100 / question count, rounded to nearest hundredth
-    document.getElementById('defaultPts').value = Math.round((100 / extracted.length) * 100) / 100;
 
     extractedImages = content.images || {};
 
