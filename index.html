@@ -470,6 +470,73 @@ async function readPDF(file) {
 }
 
 // ─── AI Extraction ────────────────────────────────────────────────────────────
+// ─── Chemistry Text Sanitizer ──────────────────────────────────────────────────────────────────────────
+// Converts plain-text chemical notation the LLM sometimes returns into proper Unicode.
+// Handles: NO3^-, PO4^3-, Fe^2+, H2O, CO2, 10^23, x10^-3, etc.
+const SUP = { '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','+':'⁺','-':'⁻' };
+const SUB = { '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉' };
+
+function toSup(s) { return String(s).split('').map(c => SUP[c] || c).join(''); }
+function toSub(s) { return String(s).split('').map(c => SUB[c] || c).join(''); }
+
+function chemSanitize(text) {
+  if (!text) return text;
+  let s = String(text);
+
+  // x10^N or x10^-N or *10^N  (scientific notation prose form)
+  s = s.replace(/[x×\*]\s*10\^([+-]?\d+)/gi, (_, exp) => '×10' + toSup(exp));
+
+  // Standalone ^{...} or ^(...) superscript blocks
+  s = s.replace(/\^\{([^}]+)\}/g, (_, e) => toSup(e));
+  s = s.replace(/\^\(([^)]+)\)/g, (_, e) => toSup(e));
+
+  // ^2-, ^3-, ^4-, ^2+, ^3+, ^4+ (charge blocks like PO4^3-)
+  s = s.replace(/\^(\d+)([+-])/g, (_, n, sign) => toSup(n) + toSup(sign));
+
+  // ^- and ^+ alone (simple charge)
+  s = s.replace(/\^([+-])/g, (_, sign) => toSup(sign));
+
+  // ^N (plain superscript digit after caret)
+  s = s.replace(/\^(\d+)/g, (_, n) => toSup(n));
+
+  // _{...} or _(...) subscript blocks
+  s = s.replace(/_{([^}]+)}/g, (_, e) => toSub(e));
+  s = s.replace(/_\(([^)]+)\)/g, (_, e) => toSub(e));
+
+  // _N single subscript digit
+  s = s.replace(/_(\d)/g, (_, n) => toSub(n));
+
+  // Implicit subscripts: letter followed by digit(s) in chemical formula context.
+  // The lookahead must include ^ so NO3^- gets 3 subscripted before the caret is consumed.
+  // Also triggers on already-converted Unicode superscript/subscript ranges and end of string.
+  s = s.replace(/([A-Za-z])(\d+)(?=[A-Za-z()\[\]^_²³¹⁰-ⁿ₀-₟+\-]|$)/g,
+    (_, letter, digits) => letter + toSub(digits));
+
+  return s;
+}
+
+// Apply sanitizer to all text fields of a question object
+function sanitizeQuestion(q) {
+  q.body             = chemSanitize(q.body);
+  q.suggested_answer = chemSanitize(q.suggested_answer);
+  if (q.feedback) {
+    q.feedback.general   = chemSanitize(q.feedback.general);
+    q.feedback.correct   = chemSanitize(q.feedback.correct);
+    q.feedback.incorrect = chemSanitize(q.feedback.incorrect);
+  }
+  if (Array.isArray(q.answers)) {
+    q.answers = q.answers.map(chemSanitize);
+  }
+  if (q.fib_blanks) {
+    Object.keys(q.fib_blanks).forEach(bid => {
+      if (q.fib_blanks[bid]) {
+        q.fib_blanks[bid].correct = chemSanitize(q.fib_blanks[bid].correct);
+      }
+    });
+  }
+  return q;
+}
+
 // ─── JSON Parse Helper ───────────────────────────────────────────────────────────────────
 function tryParseJSON(raw) {
   if (!raw || !raw.trim()) return null;
@@ -710,7 +777,7 @@ Apply this to every formula, ion, charge, and equation in every question body, a
     const autoPts = Math.round((100 / extracted.length) * 100) / 100;
     document.getElementById('defaultPts').value = autoPts;
     const pts = autoPts;
-    questions = extracted.map(q => ({
+    questions = extracted.map(q => sanitizeQuestion({
       id: nextId++,
       type: TYPES.includes(q.type) ? q.type : 'MC',
       title: q.title || '',
