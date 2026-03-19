@@ -143,6 +143,34 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
     <div id="resumeStatus" class="status-msg" style="margin-top:10px"></div>
   </div>
 
+  <!-- MERGE CARD -->
+  <div class="card" id="mergeCard">
+    <h2><span class="step-dot" style="background:#d97706">⊕</span>Merge Workbench Files → QTI</h2>
+    <p style="font-size:13px;color:#555;margin:0 0 12px">Upload two or more saved workbench .zip files to combine all their questions into one QTI export — perfect for building question banks from multiple test versions.</p>
+
+    <label class="btn btn-navy" style="cursor:pointer;display:inline-flex;margin-bottom:12px">
+      📂 Add Workbench File(s)
+      <input type="file" id="mergeFileInput" accept=".zip" multiple style="display:none" onchange="addMergeFiles(this)">
+    </label>
+
+    <div id="mergeFileList" style="display:none;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:600;color:#444;margin-bottom:8px">Files queued for merge:</div>
+      <div id="mergeFileRows"></div>
+      <div id="mergeSummary" style="font-size:13px;color:#555;margin-top:8px"></div>
+    </div>
+
+    <div id="mergeTitleRow" style="display:none;margin-bottom:12px">
+      <label for="mergeTitleInput">Merged Quiz Title</label>
+      <input type="text" id="mergeTitleInput" placeholder="Combined Question Bank" style="margin-bottom:0">
+    </div>
+
+    <div class="btnrow">
+      <button class="btn btn-green" id="mergeExportBtn" style="display:none" onclick="doMergeExport()">⬇ Merge &amp; Export QTI</button>
+      <button class="btn btn-gray btn-sm" id="mergeClearBtn" style="display:none" onclick="clearMerge()">Clear All</button>
+    </div>
+    <div id="mergeStatus" class="status-msg" style="margin-top:10px"></div>
+  </div>
+
     <!-- STEP 2: UPLOAD -->
   <div class="card">
     <h2><span class="step-dot">2</span>Upload Document</h2>
@@ -1644,9 +1672,171 @@ async function loadWorkbenchZip(input) {
   input.value = '';
 }
 
+// ─── Workbench Merge ─────────────────────────────────────────────────────────────────────────────────
+let mergeQueue = []; // [{ filename, questions, images }]
+
+function mergeStatus(msg, type) {
+  const el = document.getElementById('mergeStatus');
+  el.className = 'status-msg show status-' + (type || 'loading');
+  el.innerHTML = msg;
+}
+
+function refreshMergeUI() {
+  const hasFiles = mergeQueue.length > 0;
+  document.getElementById('mergeFileList').style.display    = hasFiles ? '' : 'none';
+  document.getElementById('mergeTitleRow').style.display    = hasFiles ? '' : 'none';
+  document.getElementById('mergeExportBtn').style.display   = hasFiles ? '' : 'none';
+  document.getElementById('mergeClearBtn').style.display    = hasFiles ? '' : 'none';
+
+  const rows = document.getElementById('mergeFileRows');
+  rows.innerHTML = '';
+  mergeQueue.forEach((entry, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;background:#f4f4fc;border:1.5px solid #e0e0f0;border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:13px';
+    row.innerHTML = `
+      <span style="flex:1"><strong>${entry.filename}</strong></span>
+      <span style="color:#6465F1;font-weight:700">${entry.questions.length} questions</span>
+      <span style="color:#888">${Object.keys(entry.images).length} image(s)</span>
+      <button class="btn btn-red btn-sm" onclick="removeMergeFile(${i})">✕</button>`;
+    rows.appendChild(row);
+  });
+
+  const total = mergeQueue.reduce((n, e) => n + e.questions.length, 0);
+  document.getElementById('mergeSummary').textContent =
+    mergeQueue.length + ' file' + (mergeQueue.length !== 1 ? 's' : '') +
+    ' — ' + total + ' total questions';
+}
+
+function removeMergeFile(idx) {
+  mergeQueue.splice(idx, 1);
+  refreshMergeUI();
+  if (!mergeQueue.length) {
+    document.getElementById('mergeStatus').className = 'status-msg';
+  }
+}
+
+function clearMerge() {
+  mergeQueue = [];
+  document.getElementById('mergeFileInput').value = '';
+  document.getElementById('mergeTitleInput').value = '';
+  document.getElementById('mergeStatus').className = 'status-msg';
+  refreshMergeUI();
+}
+
+async function addMergeFiles(input) {
+  if (!input.files || !input.files.length) return;
+  mergeStatus('<span class="spinner"></span> Reading file(s)…', 'loading');
+
+  for (const file of Array.from(input.files)) {
+    // Skip duplicates by filename
+    if (mergeQueue.find(e => e.filename === file.name)) continue;
+    try {
+      const ab  = await file.arrayBuffer();
+      const zip = await JSZip.loadAsync(ab);
+      const wbFile = zip.file('_workbench.json');
+      if (!wbFile) throw new Error('"' + file.name + '" is not a workbench file — use files saved with Save Session.');
+      const wb = JSON.parse(await wbFile.async('string'));
+      mergeQueue.push({
+        filename:  file.name,
+        questions: wb.questions  || [],
+        images:    wb.extractedImages || {}
+      });
+    } catch(err) {
+      mergeStatus('⚠ ' + err.message, 'error');
+      input.value = '';
+      return;
+    }
+  }
+
+  input.value = '';
+  refreshMergeUI();
+
+  // Auto-suggest a title from the first file's meta if field is empty
+  const titleInput = document.getElementById('mergeTitleInput');
+  if (!titleInput.value) titleInput.value = 'Combined Question Bank';
+
+  const total = mergeQueue.reduce((n, e) => n + e.questions.length, 0);
+  mergeStatus('✅ ' + mergeQueue.length + ' file(s) ready — ' + total + ' questions total. Set a title and click Merge & Export QTI.', 'done');
+}
+
+async function doMergeExport() {
+  if (!mergeQueue.length) return;
+  const title = document.getElementById('mergeTitleInput').value.trim() || 'Combined Question Bank';
+
+  mergeStatus('<span class="spinner"></span> Merging and building QTI…', 'loading');
+
+  // Combine questions and images, rewriting image keys per-source to avoid collisions
+  const mergedImages = {};
+  const mergedQuestions = [];
+  let idCounter = 1;
+
+  for (let fi = 0; fi < mergeQueue.length; fi++) {
+    const entry   = mergeQueue[fi];
+    const prefix  = 'src' + (fi + 1) + '_';
+
+    // Remap image keys for this source
+    const keyMap = {};
+    for (const [key, im] of Object.entries(entry.images)) {
+      const newKey  = prefix + key;
+      keyMap[key]   = newKey;
+      mergedImages[newKey] = im;
+    }
+
+    // Copy questions, rewriting image_ref and ids
+    for (const q of entry.questions) {
+      const newQ = JSON.parse(JSON.stringify(q)); // deep copy
+      newQ.id       = idCounter++;
+      if (newQ.image_ref && keyMap[newQ.image_ref]) {
+        newQ.image_ref = keyMap[newQ.image_ref];
+      }
+      mergedQuestions.push(newQ);
+    }
+  }
+
+  // Build QTI using existing assessmentXML + manifestXML functions
+  const aId   = 'assessment_' + Date.now();
+  const fname = aId + '.xml';
+  const usedImgKeys = [...new Set(mergedQuestions.map(q => q.image_ref).filter(r => r && mergedImages[r]))];
+
+  // Temporarily swap globals so existing QTI builders work
+  const savedQuestions        = questions;
+  const savedExtractedImages  = extractedImages;
+  questions       = mergedQuestions;
+  extractedImages = mergedImages;
+
+  const settings = { shuffle: false, showCorrect: false, oneAtTime: false, cantGoBack: false };
+  const aXml  = assessmentXML(title, '', settings, aId, mergedImages);
+  const mXml  = manifestXML(aId, fname, usedImgKeys);
+
+  // Restore globals
+  questions       = savedQuestions;
+  extractedImages = savedExtractedImages;
+
+  const zip = new JSZip();
+  zip.file('imsmanifest.xml', mXml);
+  zip.file(fname, aXml);
+  for (const key of usedImgKeys) {
+    const im  = mergedImages[key];
+    const ext = (im.mime || 'image/png').split('/')[1] || 'png';
+    zip.file('images/' + key + '.' + ext, im.data, { base64: true });
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = title.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '_merged_qti.zip';
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(url);
+  a.remove();
+
+  mergeStatus('✅ Exported ' + mergedQuestions.length + ' questions from ' + mergeQueue.length + ' workbench files.', 'done');
+}
+
 </script>
 <footer style="text-align:center;padding:28px 16px;font-size:12px;color:#888;border-top:1px solid #e0e0f0;margin-top:12px">
-  Created by <strong style="color:#201D52">Chris Leatherwood</strong> &mdash; Tyler, TX &nbsp;|&nbsp; &copy; 2025&ndash;2026 &nbsp;|&nbsp; v5.1
+  Created by <strong style="color:#201D52">Chris Leatherwood</strong> &mdash; Tyler, TX &nbsp;|&nbsp; &copy; 2025&ndash;2026 &nbsp;|&nbsp; v5.2
 </footer>
 </body>
 </html>
