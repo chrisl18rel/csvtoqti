@@ -98,6 +98,19 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
     <input type="hidden" id="apiKey">
   </div>
 
+    <!-- RESUME CARD -->
+  <div class="card" id="resumeCard">
+    <h2><span class="step-dot" style="background:#059669">↩</span>Resume Previous Session</h2>
+    <p style="font-size:13px;color:#555;margin:0 0 12px">Upload a previously saved QTI workbench .zip to pick up exactly where you left off.</p>
+    <div class="btnrow">
+      <label class="btn btn-green" style="cursor:pointer;margin:0">
+        📂 Load Saved Session
+        <input type="file" id="resumeFileInput" accept=".zip" style="display:none" onchange="loadWorkbenchZip(this)">
+      </label>
+    </div>
+    <div id="resumeStatus" class="status-msg" style="margin-top:10px"></div>
+  </div>
+
     <!-- STEP 2: UPLOAD -->
   <div class="card">
     <h2><span class="step-dot">2</span>Upload Document</h2>
@@ -110,12 +123,21 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
     <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown">
     <div style="margin-bottom:14px">
       <label style="font-weight:700;font-size:13px;color:#201D52;display:block;margin-bottom:8px">Extraction Preferences</label>
-      <div class="check-group" style="background:#f4f4fc;border-radius:10px;padding:12px 14px;border:1.5px solid #e0e0f0">
-        <label style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:10px;cursor:pointer">
-          <input type="checkbox" id="allowSA" style="width:18px;height:18px;accent-color:#6465F1;margin:0">
-          Allow Short Answer questions
-        </label>
-        <span style="font-size:12px;color:#666;margin-left:28px;display:block;margin-top:2px">Uncheck to force all open-ended questions into MC, TF, or fill-in-the-blank instead</span>
+      <div class="check-group" style="background:#f4f4fc;border-radius:10px;padding:12px 14px;border:1.5px solid #e0e0f0;flex-direction:column;gap:12px">
+        <div>
+          <label style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input type="checkbox" id="allowSA" style="width:18px;height:18px;accent-color:#6465F1;margin:0">
+            Allow Short Answer questions
+          </label>
+          <span style="font-size:12px;color:#666;margin-left:28px;display:block;margin-top:2px">Uncheck to force all open-ended questions into MC, TF, or fill-in-the-blank instead</span>
+        </div>
+        <div>
+          <label style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input type="checkbox" id="allowFeedback" style="width:18px;height:18px;accent-color:#6465F1;margin:0">
+            Generate feedback for all questions
+          </label>
+          <span style="font-size:12px;color:#666;margin-left:28px;display:block;margin-top:2px">When checked, AI must provide General, Correct, and Incorrect feedback for every question</span>
+        </div>
       </div>
     </div>
     <div class="btnrow">
@@ -196,8 +218,13 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
       <br>After import, open the quiz in Canvas to set time limits, access codes, or other settings not supported by QTI.
     </div>
     <div class="btnrow">
-      <button class="btn btn-green" id="downloadBtn">⬇ Download QTI .zip</button>
+      <button class="btn btn-green" id="downloadBtn">⬇ Download QTI for Canvas</button>
+      <button class="btn btn-violet" id="saveWorkbenchBtn">💾 Save Session (.zip)</button>
     </div>
+    <p style="font-size:12px;color:#888;margin:8px 0 0">
+      <strong>Download QTI for Canvas</strong> — imports into Canvas but cannot be reloaded here.<br>
+      <strong>Save Session</strong> — saves your full workbench so you can resume editing later.
+    </p>
   </div>
 
 </div>
@@ -439,7 +466,11 @@ async function doExtract() {
 
   setStatus('<span class="spinner"></span> Sending to Claude — extracting questions…', 'loading');
 
-  const allowSA = document.getElementById('allowSA').checked;
+  const allowSA       = document.getElementById('allowSA').checked;
+  const allowFeedback = document.getElementById('allowFeedback').checked;
+  const feedbackRule  = allowFeedback
+    ? 'FEEDBACK IS REQUIRED. You MUST provide all three feedback fields for EVERY question — no exceptions: (1) "general" feedback shown to all students, (2) "correct" feedback shown when correct, (3) "incorrect" feedback shown when incorrect. Do not leave any feedback field blank.'
+    : 'Do NOT generate any feedback. Leave all feedback fields as empty strings: { "general": "", "correct": "", "incorrect": "" }.';
   const saRule  = allowSA
     ? 'Short Answer (SA) questions are allowed.'
     : 'Short Answer (SA) free-text questions are NOT allowed. Convert them instead into: MC (add plausible distractors), TF (reframe as true/false), MR (select all that apply), or FIB (fill-in-multiple-blanks with dropdown choices) — whichever best fits the question. Be creative but do not change the chemistry concept being tested. NEVER output type SA.';
@@ -521,6 +552,7 @@ IMAGE ASSOCIATION: If the document contains embedded images (you will see [DOCUM
 - If no image is associated with a question, leave "image_ref" as ""
 
 Short answer preference: ${saRule}
+Feedback requirement: ${feedbackRule}
 
 CRITICAL — Chemistry formatting: All chemical formulas, equations, and scientific notation MUST use proper Unicode subscript and superscript characters. Never use plain numbers next to letters for formulas. Use these exact characters:
 
@@ -619,7 +651,7 @@ Apply this to every formula, ion, charge, and equation in every question body, a
       return;
     }
 
-    const pts = parseInt(document.getElementById('defaultPts').value) || 1;
+    const pts = parseFloat(document.getElementById('defaultPts').value) || 1;
     questions = extracted.map(q => ({
       id: nextId++,
       type: TYPES.includes(q.type) ? q.type : 'MC',
@@ -636,9 +668,9 @@ Apply this to every formula, ion, charge, and equation in every question body, a
 
     if (parsed.suggested_title) document.getElementById('quizTitle').value = parsed.suggested_title;
 
-    // Auto-set default points: 100 / question count, rounded to nearest hundredth
-    const autoPts = Math.round((100 / extracted.length) * 100) / 100;
-    document.getElementById('defaultPts').value = autoPts;
+    // Auto-calc Card 3 display field: 100 / question count, rounded to nearest hundredth
+    document.getElementById('defaultPts').value = Math.round((100 / extracted.length) * 100) / 100;
+
     extractedImages = content.images || {};
 
     setStatus('✅ Extracted ' + questions.length + ' question' + (questions.length !== 1 ? 's' : '') + ' from "' + selectedFile.name + '"', 'done');
@@ -1205,10 +1237,10 @@ const SESSION_META_KEY = 'qti_session_meta';
 
 function saveSession() {
   try {
-    sessionStorage.setItem(SESSION_Q_KEY, JSON.stringify(questions));
+    localStorage.setItem(SESSION_Q_KEY, JSON.stringify(questions));
     // Images can be large — try to store, silently skip if over quota
     try {
-      sessionStorage.setItem(SESSION_IMG_KEY, JSON.stringify(extractedImages));
+      localStorage.setItem(SESSION_IMG_KEY, JSON.stringify(extractedImages));
     } catch(e) {
       console.warn('Session image save skipped (too large for sessionStorage):', e.message);
     }
@@ -1218,7 +1250,7 @@ function saveSession() {
       defaultPts: document.getElementById('defaultPts').value,
       fileName:   document.getElementById('chosenFileName').textContent
     };
-    sessionStorage.setItem(SESSION_META_KEY, JSON.stringify(meta));
+    localStorage.setItem(SESSION_META_KEY, JSON.stringify(meta));
   } catch(e) {
     console.warn('Session save failed:', e.message);
   }
@@ -1226,9 +1258,9 @@ function saveSession() {
 
 function loadSession() {
   try {
-    const qRaw   = sessionStorage.getItem(SESSION_Q_KEY);
-    const imgRaw = sessionStorage.getItem(SESSION_IMG_KEY);
-    const metaRaw= sessionStorage.getItem(SESSION_META_KEY);
+    const qRaw   = localStorage.getItem(SESSION_Q_KEY);
+    const imgRaw = localStorage.getItem(SESSION_IMG_KEY);
+    const metaRaw= localStorage.getItem(SESSION_META_KEY);
     if (!qRaw) return false;
 
     questions = JSON.parse(qRaw);
@@ -1261,9 +1293,9 @@ function loadSession() {
 }
 
 function clearSession() {
-  sessionStorage.removeItem(SESSION_Q_KEY);
-  sessionStorage.removeItem(SESSION_IMG_KEY);
-  sessionStorage.removeItem(SESSION_META_KEY);
+  localStorage.removeItem(SESSION_Q_KEY);
+  localStorage.removeItem(SESSION_IMG_KEY);
+  localStorage.removeItem(SESSION_META_KEY);
   questions = [];
   extractedImages = {};
   nextId = 1;
@@ -1274,6 +1306,124 @@ function clearSession() {
 }
 
 // Auto-save whenever questions array changes — hook into key mutation points
+window.addEventListener('beforeunload', () => { if (questions.length) saveSession(); });
+
+// ─── Workbench Save / Load ─────────────────────────────────────────────────────
+// "Save Session" embeds a _workbench.json inside the zip so you can reload later.
+// "Load Saved Session" reads that file back and restores full state.
+
+document.getElementById('saveWorkbenchBtn').addEventListener('click', async () => {
+  if (!questions.length) {
+    alert('No questions to save yet. Extract questions first.');
+    return;
+  }
+  const title = document.getElementById('quizTitle').value.trim() || 'Quiz';
+
+  // Build workbench payload — questions + images + all meta
+  const workbench = {
+    version: 2,
+    savedAt: new Date().toISOString(),
+    meta: {
+      title,
+      desc:        document.getElementById('quizDesc').value,
+      defaultPts:  document.getElementById('defaultPts').value,
+      accessCode:  document.getElementById('accessCode').value,
+      availFrom:   document.getElementById('dateAvailFrom').value,
+      dueDate:     document.getElementById('dateDue').value,
+      availUntil:  document.getElementById('dateAvailUntil').value,
+      shuffle:     document.getElementById('shuffleAns').checked,
+      showCorrect: document.getElementById('showCorrect').checked,
+      oneAtTime:   document.getElementById('oneAtTime').checked,
+      cantGoBack:  document.getElementById('cantGoBack').checked,
+    },
+    questions,
+    extractedImages
+  };
+
+  const zip = new JSZip();
+  zip.file('_workbench.json', JSON.stringify(workbench));
+
+  // Also include images as files so the zip is self-contained
+  for (const [key, im] of Object.entries(extractedImages)) {
+    const ext = (im.mime || 'image/png').split('/')[1] || 'png';
+    zip.file('images/' + key + '.' + ext, im.data, { base64: true });
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = title.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '_workbench.zip';
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(url);
+  a.remove();
+});
+
+async function loadWorkbenchZip(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const statusEl = document.getElementById('resumeStatus');
+  statusEl.className = 'status-msg show status-loading';
+  statusEl.innerHTML = '<span class="spinner"></span> Loading session…';
+
+  try {
+    const ab  = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(ab);
+
+    const wbFile = zip.file('_workbench.json');
+    if (!wbFile) {
+      throw new Error('This zip does not contain a workbench session. Make sure you use a file saved with "Save Session", not a Canvas QTI export.');
+    }
+
+    const wb = JSON.parse(await wbFile.async('string'));
+
+    // Restore state
+    questions       = wb.questions || [];
+    extractedImages = wb.extractedImages || {};
+
+    const maxId = questions.reduce((m, q) => Math.max(m, q.id), 0);
+    nextId = maxId + 1;
+
+    if (wb.meta) {
+      const m = wb.meta;
+      if (m.title)       document.getElementById('quizTitle').value      = m.title;
+      if (m.desc)        document.getElementById('quizDesc').value        = m.desc;
+      if (m.defaultPts)  document.getElementById('defaultPts').value      = m.defaultPts;
+      if (m.accessCode)  document.getElementById('accessCode').value      = m.accessCode;
+      if (m.availFrom)   document.getElementById('dateAvailFrom').value   = m.availFrom;
+      if (m.dueDate)     document.getElementById('dateDue').value         = m.dueDate;
+      if (m.availUntil)  document.getElementById('dateAvailUntil').value  = m.availUntil;
+      document.getElementById('shuffleAns').checked   = !!m.shuffle;
+      document.getElementById('showCorrect').checked  = !!m.showCorrect;
+      document.getElementById('oneAtTime').checked    = !!m.oneAtTime;
+      document.getElementById('cantGoBack').checked   = !!m.cantGoBack;
+    }
+
+    renderAllQuestions();
+    updateQCount();
+    saveSession();
+
+    const imgCount = Object.keys(extractedImages).length;
+    document.getElementById('extractSummary').innerHTML =
+      '<strong>' + questions.length + ' questions loaded from saved session</strong>' +
+      (imgCount ? ' · ' + imgCount + ' image(s) restored' : '') +
+      ' (saved ' + (wb.savedAt ? new Date(wb.savedAt).toLocaleString() : 'previously') + ')' +
+      ' — <a href="#" onclick="clearSession();return false;" style="color:#dc3545">Clear</a>';
+
+    ['settingsCard','questionsCard','exportCard'].forEach(show);
+
+    statusEl.className = 'status-msg show status-done';
+    statusEl.innerHTML = '✅ Session restored — ' + questions.length + ' questions loaded.';
+    document.getElementById('settingsCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch(err) {
+    statusEl.className = 'status-msg show status-error';
+    statusEl.innerHTML = '⚠ ' + err.message;
+  }
+  input.value = '';
+}
 
 </script>
 </body>
