@@ -282,10 +282,13 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
     <div class="btnrow">
       <button class="btn btn-green" id="downloadBtn">⬇ Download QTI for Canvas</button>
       <button class="btn btn-violet" id="saveWorkbenchBtn">💾 Save Session (.zip)</button>
+      <button class="btn" id="blooketBtn" style="background:#f97316">🟠 Export Blooket CSV</button>
     </div>
     <p style="font-size:12px;color:#888;margin:8px 0 0">
       <strong>Download QTI for Canvas</strong> — imports into Canvas but cannot be reloaded here.<br>
-      <strong>Save Session</strong> — saves your full workbench so you can resume editing later.
+      <strong>Save Session</strong> — saves your full workbench so you can resume editing later.<br>
+      <strong>Export Blooket CSV</strong> — all questions converted to MC format for Blooket import.
+      <span style="color:#d97706">⚠ Images cannot be included in Blooket CSV — add them manually inside Blooket after import.</span>
     </p>
   </div>
 
@@ -555,10 +558,16 @@ function sanitizeQuestion(q) {
   if (Array.isArray(q.answers)) {
     q.answers = q.answers.map(chemSanitize);
   }
+  if (Array.isArray(q.blooket_distractors)) {
+    q.blooket_distractors = q.blooket_distractors.map(chemSanitize);
+  }
   if (q.fib_blanks) {
     Object.keys(q.fib_blanks).forEach(bid => {
       if (q.fib_blanks[bid]) {
         q.fib_blanks[bid].correct = chemSanitize(q.fib_blanks[bid].correct);
+        if (Array.isArray(q.fib_blanks[bid].blooket_distractors)) {
+          q.fib_blanks[bid].blooket_distractors = q.fib_blanks[bid].blooket_distractors.map(chemSanitize);
+        }
       }
     });
   }
@@ -654,11 +663,13 @@ Rules for each type — always fill "correct" and "suggested_answer" to the best
   • answers = [a tight bounding range bracketing the sig-fig-rounded answer, formatted as "[min, max]" — use E-notation for scientific notation (e.g. "[6.8, 7.0]" for a 2-sig-fig answer of 6.9, or "[6.020E23, 6.024E23]" for 6.022×10²³). Students type answers like 6.02E23 or 6.9, so the range must match that format. Make the range just wide enough to accept rounding to the correct sig figs.]
   • correct = [] (leave empty, the range in answers[0] is the answer)
   • suggested_answer = the sig-fig-correct answer with units and a brief note, e.g. "6.9 (2 sig figs, from 7.2 × 10⁻⁸)" or "6.022 × 10²³ mol⁻¹ (4 sig figs)".
+  • blooket_distractors = [exactly 3 plausible but wrong numerical answer strings a student might calculate if they made a common error — same sig figs, same units, realistic magnitude. Use proper Unicode for formulas. Examples of good distractors: wrong formula used, sig fig error, arithmetic mistake, inverted calculation]. Format as plain numbers or E-notation matching the correct answer's format.
 
 - SA  = single fill-in-the-blank (student types one free-text answer).
   • answers = list of acceptable answer strings (include common variations, abbreviations, and alternate spellings)
   • correct = [] (leave empty)
   • suggested_answer = the primary canonical correct answer
+  • blooket_distractors = [exactly 3 plausible but wrong answer strings — realistic things a student might say. Use proper Unicode for any chemical formulas.]
 
 - FIB = fill-in-MULTIPLE-blanks — REQUIRED any time a question asks for TWO OR MORE separate answers.
   This includes (but is not limited to):
@@ -672,14 +683,15 @@ Rules for each type — always fill "correct" and "suggested_answer" to the best
   • body = the question text with [blank_id] markers, one per required answer, using descriptive snake_case names.
     Example: "What is the pH [ph_blank] and pOH [poh_blank] of this solution?"
     Example: "The negatively charged [particle1] orbits the nucleus while the positively charged [particle2] and neutrally charged [particle3] are in the nucleus."
-  • fib_blanks = object where each key is a blank_id and value has ONLY a "correct" field with the one correct answer.
-    For numerical answers use plain decimal or E-notation (e.g. "2.44", "11.56", "1.0E-3") — no Unicode superscripts.
-    For text answers use the simplest standard form (e.g. "electron", "proton", "neutron").
-    Example: { "ph_blank":  { "correct": "2.44"  },
-               "poh_blank": { "correct": "11.56" } }
-    Example: { "particle1": { "correct": "electron" },
-               "particle2": { "correct": "proton"   },
-               "particle3": { "correct": "neutron"  } }
+  • fib_blanks = object where each key is a blank_id and value has a "correct" field and a "blooket_distractors" field.
+    For numerical answers use plain decimal or E-notation — no Unicode superscripts.
+    For text answers use the simplest standard form.
+    "blooket_distractors" = array of exactly 3 plausible wrong answers for that specific blank.
+    Example: { "ph_blank":  { "correct": "2.44",     "blooket_distractors": ["11.56", "1.44", "3.44"]      },
+               "poh_blank": { "correct": "11.56",    "blooket_distractors": ["2.44",  "12.56", "10.56"]    } }
+    Example: { "particle1": { "correct": "electron", "blooket_distractors": ["proton","neutron","photon"]   },
+               "particle2": { "correct": "proton",   "blooket_distractors": ["electron","neutron","quark"]  },
+               "particle3": { "correct": "neutron",  "blooket_distractors": ["electron","proton","photon"]  } }
   • answers = [] (leave empty)
   • correct = [] (leave empty)
   • suggested_answer = one entry per blank: "ph_blank: 2.44, poh_blank: 11.56"
@@ -816,6 +828,7 @@ Apply this to every formula, ion, charge, and equation in every question body, a
       fib_blanks: q.fib_blanks || {},
       image_ref: q.image_ref || '',
       suggested_answer: q.suggested_answer || '',
+      blooket_distractors: q.blooket_distractors || [],
       feedback: { general: q.feedback?.general||'', correct: q.feedback?.correct||'', incorrect: q.feedback?.incorrect||'' }
     }));
 
@@ -1834,9 +1847,173 @@ async function doMergeExport() {
   mergeStatus('✅ Exported ' + mergedQuestions.length + ' questions from ' + mergeQueue.length + ' workbench files.', 'done');
 }
 
+// ─── Blooket CSV Export ────────────────────────────────────────────────────────────────────────────────
+// Blooket format: Question #, Question Text, Answer 1, Answer 2, Answer 3, Answer 4,
+//                 Time Limit (sec), Correct Answer(s)
+// All questions must be MC. ESSAY/FILE are skipped.
+// Images cannot be embedded in Blooket CSV — note is shown to user.
+
+function csvCell(val) {
+  if (val === null || val === undefined) return '';
+  const s = String(val);
+  // Wrap in quotes if contains comma, quote, or newline
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function questionToBlooketRows(q, qNum) {
+  const DEFAULT_TIME = 20;
+  const rows = [];
+
+  if (q.type === 'ESSAY' || q.type === 'FILE') return rows; // skip — no MC equivalent
+
+  if (q.type === 'MC' || q.type === 'TF') {
+    const answers = q.answers.filter(a => a && String(a).trim());
+    if (answers.length < 2) return rows;
+    const correctIdx = q.correct[0]; // 0-based
+    const correctNum = correctIdx + 1; // 1-based
+    rows.push([
+      qNum,
+      q.body,
+      answers[0] || '', answers[1] || '', answers[2] || '', answers[3] || '',
+      DEFAULT_TIME,
+      correctNum
+    ]);
+  }
+
+  else if (q.type === 'MR') {
+    // Multiple-select: Blooket supports comma-separated correct answers
+    const answers = q.answers.filter(a => a && String(a).trim());
+    if (answers.length < 2) return rows;
+    const correctNums = q.correct.map(i => i + 1).join(',');
+    rows.push([
+      qNum,
+      q.body,
+      answers[0] || '', answers[1] || '', answers[2] || '', answers[3] || '',
+      DEFAULT_TIME,
+      correctNums
+    ]);
+  }
+
+  else if (q.type === 'NUM') {
+    // Convert to MC using correct answer + distractors
+    const correct = q.suggested_answer
+      ? q.suggested_answer.split('(')[0].trim() // strip the sig-fig note
+      : (q.answers[0] || '').replace(/[\[\]]/g, '').split(',')[0].trim();
+    const distractors = (q.blooket_distractors || []).slice(0, 3);
+    // Pad distractors if fewer than 3
+    while (distractors.length < 3) distractors.push('—');
+    // Build 4 choices: shuffle correct + distractors, track which position correct ends up in
+    const pool = shuffle([correct, ...distractors.slice(0, 3)]);
+    const correctPos = pool.indexOf(correct) + 1; // 1-based
+    rows.push([
+      qNum,
+      q.body,
+      pool[0] || '', pool[1] || '', pool[2] || '', pool[3] || '',
+      DEFAULT_TIME,
+      correctPos
+    ]);
+  }
+
+  else if (q.type === 'SA') {
+    // Convert to MC using first acceptable answer + distractors
+    const correct = q.answers[0] || q.suggested_answer || '';
+    if (!correct) return rows;
+    const distractors = (q.blooket_distractors || []).slice(0, 3);
+    while (distractors.length < 3) distractors.push('—');
+    const pool = shuffle([correct, ...distractors.slice(0, 3)]);
+    const correctPos = pool.indexOf(correct) + 1;
+    rows.push([
+      qNum,
+      q.body,
+      pool[0] || '', pool[1] || '', pool[2] || '', pool[3] || '',
+      DEFAULT_TIME,
+      correctPos
+    ]);
+  }
+
+  else if (q.type === 'FIB') {
+    // One Blooket question per blank
+    const blankIds = Object.keys(q.fib_blanks || {});
+    blankIds.forEach((bid, bi) => {
+      const bl = q.fib_blanks[bid] || {};
+      const correct = bl.correct || '';
+      if (!correct) return;
+      const distractors = (bl.blooket_distractors || []).slice(0, 3);
+      while (distractors.length < 3) distractors.push('—');
+      // Body: replace [blank_id] markers with underscores for readability
+      let body = q.body.replace(new RegExp('\\[' + bid + '\\]', 'g'), '______');
+      if (blankIds.length > 1) body += ' (' + (bi + 1) + '/' + blankIds.length + ')';
+      const pool = shuffle([correct, ...distractors.slice(0, 3)]);
+      const correctPos = pool.indexOf(correct) + 1;
+      rows.push([
+        qNum + (bi > 0 ? '.' + bi : ''),
+        body,
+        pool[0] || '', pool[1] || '', pool[2] || '', pool[3] || '',
+        DEFAULT_TIME,
+        correctPos
+      ]);
+    });
+  }
+
+  return rows;
+}
+
+document.getElementById('blooketBtn').addEventListener('click', () => {
+  if (!questions.length) {
+    alert('No questions to export. Extract questions first.');
+    return;
+  }
+
+  const lines = [];
+  // Header row (matches Blooket template exactly)
+  lines.push([
+    'Question #', 'Question Text',
+    'Answer 1', 'Answer 2', 'Answer 3\n(Optional)', 'Answer 4\n(Optional)',
+    'Time Limit (sec)\n(Max: 300 seconds)', 'Correct Answer(s)\n(Only include Answer #)'
+  ].map(csvCell).join(','));
+
+  let blooketNum = 1;
+  let skipped    = 0;
+  questions.forEach(q => {
+    const rows = questionToBlooketRows(q, blooketNum);
+    if (!rows.length) { skipped++; return; }
+    rows.forEach(row => lines.push(row.map(csvCell).join(',')));
+    blooketNum += rows.length;
+  });
+
+  const csv  = lines.join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }); // BOM for Excel compat
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  const title = document.getElementById('quizTitle').value.trim() || 'Quiz';
+  a.download  = title.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '_blooket.csv';
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(url);
+  a.remove();
+
+  if (skipped > 0) {
+    setStatus('✅ Blooket CSV downloaded. ' + skipped + ' question(s) skipped (Essay/File type — not supported in Blooket).', 'done');
+    document.getElementById('statusMsg').classList.add('show');
+  }
+});
+
 </script>
 <footer style="text-align:center;padding:28px 16px;font-size:12px;color:#888;border-top:1px solid #e0e0f0;margin-top:12px">
-  Created by <strong style="color:#201D52">Chris Leatherwood</strong> &mdash; Tyler, TX &nbsp;|&nbsp; &copy; 2025&ndash;2026 &nbsp;|&nbsp; v5.2
+  Created by <strong style="color:#201D52">Chris Leatherwood</strong> &mdash; Tyler, TX &nbsp;|&nbsp; &copy; 2025&ndash;2026 &nbsp;|&nbsp; v5.0
 </footer>
 </body>
 </html>
