@@ -75,8 +75,12 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
 </head>
 <body>
 
-<div class="header">
-  <h1>🧪 Batch Genie - AI Quiz Extractor for Canvas</h1>
+<div class="header" style="display:flex;align-items:center;justify-content:space-between">
+  <h1 style="margin:0">🧪 Batch Genie - AI Quiz Extractor for Canvas</h1>
+  <button id="settingsGear" onclick="openSettings()" title="Settings"
+    style="background:rgba(255,255,255,0.15);border:none;cursor:pointer;border-radius:10px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;transition:background .15s"
+    onmouseover="this.style.background='rgba(255,255,255,0.28)'"
+    onmouseout="this.style.background='rgba(255,255,255,0.15)'">⚙</button>
 </div>
 
 <div class="container">
@@ -116,19 +120,9 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
     </div>
   </div>
 
-  <!-- STEP 1: API CONFIG -->
-  <div class="card">
-    <h2><span class="step-dot">1</span>API Configuration</h2>
-    <div id="vaultStatus" class="notice notice-info" style="display:none;margin-bottom:10px"></div>
-    <div>
-      <label for="modelSel">Model</label>
-      <select id="modelSel" style="max-width:360px">
-        <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-      </select>
-    </div>
-    <!-- hidden inputs still needed by JS -->
-    <input type="hidden" id="apiKey">
-  </div>
+  <!-- Hidden inputs for API state — managed via settings modal -->
+  <input type="hidden" id="apiKey">
+  <div id="vaultStatus" class="notice notice-info" style="display:none;margin:0 16px 0;max-width:980px;margin-left:auto;margin-right:auto"></div>
 
     <!-- RESUME CARD -->
   <div class="card" id="resumeCard">
@@ -292,6 +286,45 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
     </p>
   </div>
 
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsOverlay" style="display:none;position:fixed;inset:0;background:rgba(32,29,82,.55);z-index:2000;backdrop-filter:blur(3px)" onclick="handleSettingsOverlayClick(event)"></div>
+<div id="settingsModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:420px;max-width:95vw;background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(32,29,82,.25);z-index:2001;overflow:hidden">
+  <div style="background:linear-gradient(135deg,#201D52,#3a2875);padding:20px 24px;display:flex;align-items:center;justify-content:space-between">
+    <span style="color:#fff;font-size:17px;font-weight:700">⚙ Settings</span>
+    <button onclick="closeSettings()" style="background:rgba(255,255,255,0.15);border:none;cursor:pointer;color:#fff;border-radius:8px;width:32px;height:32px;font-size:18px;display:flex;align-items:center;justify-content:center">&times;</button>
+  </div>
+  <div style="padding:24px">
+
+    <!-- Step A: Password -->
+    <div id="settingsPasswordPane">
+      <label style="font-size:13px;font-weight:700;color:#444;display:block;margin-bottom:6px">Enter Settings Password</label>
+      <div style="display:flex;gap:8px">
+        <input type="password" id="settingsPasswordInput" placeholder="Password" style="flex:1;padding:10px 13px;border:1.5px solid #e0e0f0;border-radius:10px;font-size:14px;font-family:inherit"
+          onkeydown="if(event.key==='Enter')checkSettingsPassword()">
+        <button class="btn btn-indigo btn-sm" onclick="checkSettingsPassword()">Unlock</button>
+      </div>
+      <div id="settingsPasswordError" style="color:#dc3545;font-size:12px;margin-top:6px;display:none">Incorrect password.</div>
+    </div>
+
+    <!-- Step B: Model selector (shown after correct password) -->
+    <div id="settingsModelPane" style="display:none">
+      <div class="notice notice-success" id="settingsKeyStatus" style="margin-bottom:14px;font-size:13px"></div>
+      <label style="font-size:13px;font-weight:700;color:#444;display:block;margin-bottom:6px">AI Model</label>
+      <select id="settingsModelSel" style="width:100%;padding:10px 13px;border:1.5px solid #e0e0f0;border-radius:10px;font-size:14px;font-family:inherit;margin-bottom:16px">
+        <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — Recommended</option>
+        <option value="claude-opus-4-6">Claude Opus 4.6 — Most Capable</option>
+        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 — Fastest</option>
+      </select>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-indigo" style="flex:1;justify-content:center" onclick="saveSettingsModel()">💾 Save</button>
+        <button class="btn btn-gray btn-sm" onclick="closeSettings()">Cancel</button>
+      </div>
+      <div id="settingsSaveStatus" style="font-size:12px;color:#059669;margin-top:8px;display:none"></div>
+    </div>
+
+  </div>
 </div>
 
 <!-- Image picker slide-in panel -->
@@ -597,7 +630,7 @@ document.getElementById('extractBtn').addEventListener('click', doExtract);
 
 async function doExtract() {
   const apiKey = document.getElementById('apiKey').value.trim();
-  const model  = document.getElementById('modelSel').value;
+  const model  = window.activeModel || 'claude-sonnet-4-6';
   if (!apiKey) { setStatus('⚠ Enter your Anthropic API key above.', 'error'); return; }
   if (!selectedFile) { setStatus('⚠ Choose a document to upload first.', 'error'); return; }
 
@@ -1369,6 +1402,9 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
 
 // ─── Key Vault ─────────────────────────────────────────────────────────────────────────────────
 const VAULT_URL = 'https://script.google.com/macros/s/AKfycbxV6wnaoAjkhUXIdSz6w5kq_PwkMplJ7Z6kxDrDqCjrZVLwsoKrr-UdPEV7fQxVNb0Mpw/exec';
+const MODEL_STORAGE_KEY = 'qti_active_model';
+
+window.activeModel = localStorage.getItem(MODEL_STORAGE_KEY) || 'claude-sonnet-4-6';
 
 function vaultStatus(msg, type) {
   const el = document.getElementById('vaultStatus');
@@ -1390,17 +1426,105 @@ function vaultStatusClear() {
     if (!data.success) throw new Error(data.error || 'Load failed');
     if (data.key) {
       document.getElementById('apiKey').value = data.key;
-      vaultStatus('✅ API key loaded.', 'success');
-      setTimeout(vaultStatusClear, 2000);
+      vaultStatus('✅ API key loaded. Model: ' + modelLabel(window.activeModel), 'success');
+      setTimeout(vaultStatusClear, 3000);
     } else {
-      vaultStatus('⚠️ No API key found. Open the Apps Script editor and run saveKeyManually() once to store it.', 'warn');
+      vaultStatus('⚠️ No API key found. Run saveKeyManually() in Apps Script editor.', 'warn');
     }
   } catch(err) {
     vaultStatus('⚠️ Could not load key: ' + err.message, 'error');
   }
-  // After vault loads, restore any saved session
   loadSession();
 })();
+
+// ─── Settings Modal ────────────────────────────────────────────────────────────
+function modelLabel(val) {
+  const labels = {
+    'claude-sonnet-4-6':        'Claude Sonnet 4.6',
+    'claude-opus-4-6':          'Claude Opus 4.6',
+    'claude-haiku-4-5-20251001':'Claude Haiku 4.5'
+  };
+  return labels[val] || val;
+}
+
+function openSettings() {
+  document.getElementById('settingsPasswordPane').style.display = '';
+  document.getElementById('settingsModelPane').style.display    = 'none';
+  document.getElementById('settingsPasswordInput').value        = '';
+  document.getElementById('settingsPasswordError').style.display = 'none';
+  document.getElementById('settingsSaveStatus').style.display   = 'none';
+  document.getElementById('settingsOverlay').style.display      = 'block';
+  document.getElementById('settingsModal').style.display        = 'block';
+  setTimeout(() => document.getElementById('settingsPasswordInput').focus(), 80);
+}
+
+function closeSettings() {
+  document.getElementById('settingsOverlay').style.display = 'none';
+  document.getElementById('settingsModal').style.display   = 'none';
+  document.getElementById('settingsPasswordInput').value   = '';
+}
+
+function handleSettingsOverlayClick(e) {
+  if (e.target === document.getElementById('settingsOverlay')) closeSettings();
+}
+
+async function checkSettingsPassword() {
+  const pw  = document.getElementById('settingsPasswordInput').value.trim();
+  const err = document.getElementById('settingsPasswordError');
+  if (!pw) { err.style.display = ''; err.textContent = 'Enter a password.'; return; }
+  err.style.display = 'none';
+
+  try {
+    const res  = await fetch(VAULT_URL + '?action=checkPassword&pw=' + encodeURIComponent(pw));
+    const text = await res.text();
+    if (text.trim().startsWith('<')) throw new Error('Vault unreachable');
+    const data = JSON.parse(text);
+    if (!data.success || !data.valid) {
+      err.style.display = '';
+      err.textContent = 'Incorrect password.';
+      return;
+    }
+    // Password correct — show model pane
+    document.getElementById('settingsPasswordPane').style.display = 'none';
+    document.getElementById('settingsModelPane').style.display    = '';
+
+    const keyLoaded = !!document.getElementById('apiKey').value;
+    document.getElementById('settingsKeyStatus').innerHTML =
+      (keyLoaded ? '✅ API key loaded.' : '⚠️ API key not loaded.')
+      + ' &nbsp; Current model: <strong>' + modelLabel(window.activeModel) + '</strong>';
+    document.getElementById('settingsModelSel').value = window.activeModel;
+
+  } catch(err2) {
+    err.style.display = '';
+    err.textContent = 'Could not reach vault: ' + err2.message;
+  }
+}
+
+async function saveSettingsModel() {
+  const model   = document.getElementById('settingsModelSel').value;
+  const pw      = document.getElementById('settingsPasswordInput').value.trim() || '_session_';
+  const statusEl = document.getElementById('settingsSaveStatus');
+
+  window.activeModel = model;
+  localStorage.setItem(MODEL_STORAGE_KEY, model);
+
+  // Optionally persist to GAS too (nice to have, not required)
+  try {
+    await fetch(VAULT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'saveModel', model })
+    });
+  } catch(e) { /* non-fatal */ }
+
+  const keyLoaded = !!document.getElementById('apiKey').value;
+  statusEl.style.display = '';
+  statusEl.innerHTML = '✅ ' + (keyLoaded ? 'API key loaded.' : 'No API key.') + ' Model set to <strong>' + modelLabel(model) + '</strong>.';
+  document.getElementById('settingsKeyStatus').innerHTML =
+    (keyLoaded ? '✅ API key loaded.' : '⚠️ API key not loaded.')
+    + ' &nbsp; Current model: <strong>' + modelLabel(model) + '</strong>';
+
+  setTimeout(closeSettings, 1800);
+}
 
 // ─── Image Picker Panel ────────────────────────────────────────────────────────
 let imgPickerTargetId = null;
