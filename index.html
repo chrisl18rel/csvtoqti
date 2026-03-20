@@ -1426,7 +1426,7 @@ function vaultStatusClear() {
     if (!data.success) throw new Error(data.error || 'Load failed');
     if (data.key) {
       document.getElementById('apiKey').value = data.key;
-      vaultStatus('✅ API key loaded. Model: ' + modelLabel(window.activeModel), 'success');
+      vaultStatus('✅ AI Connected — ' + modelLabel(window.activeModel), 'success');
       setTimeout(vaultStatusClear, 3000);
     } else {
       vaultStatus('⚠️ No API key found. Run saveKeyManually() in Apps Script editor.', 'warn');
@@ -2137,7 +2137,7 @@ document.getElementById('blooketBtn').addEventListener('click', () => {
 
 </script>
 <footer style="text-align:center;padding:28px 16px;font-size:12px;color:#888;border-top:1px solid #e0e0f0;margin-top:12px">
-  Created by <strong style="color:#201D52">Chris Leatherwood</strong> &mdash; Tyler, TX &nbsp;|&nbsp; &copy; 2025&ndash;2026 &nbsp;|&nbsp; v6.0
+  Created by <strong style="color:#201D52">Chris Leatherwood</strong> &mdash; Tyler, TX &nbsp;|&nbsp; &copy; 2025&ndash;2026 &nbsp;|&nbsp; v6.1
 </footer>
 </body>
 </html>
