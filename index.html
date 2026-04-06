@@ -1165,7 +1165,7 @@ function itemXML(q, num, imageMap) {
   } else if (q.type === 'SA') {
     pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_str ident="${respId}" rcardinality="Single"><render_fib/></response_str></presentation>`;
     const conds = q.answers.map(a => `<respcondition continue="No"><conditionvar><varequal respident="${respId}" case="No">${esc(a)}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition>`).join('');
-    resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outputs>${conds}</resprocessing>`;
+    resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>${conds}</resprocessing>`;
   } else if (q.type === 'FIB') {
     const blankIds = Object.keys(q.fib_blanks || {});
     // Prefix each blank's response ident with the item ident to ensure global uniqueness
