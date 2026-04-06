@@ -1,4 +1,4 @@
-<!-- ai-doc-to-qti.html -->
+<!-- ai-doc-qti.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -395,11 +395,9 @@ async function readFile(file) {
 async function readDOCX(file) {
   const ab = await file.arrayBuffer();
 
-  // Extract text via mammoth
   const mammothResult = await mammoth.extractRawText({ arrayBuffer: ab.slice(0) });
   let text = mammothResult.value;
 
-  // Extract images from word/media/ using JSZip
   const images = {};
   try {
     const zip        = await JSZip.loadAsync(ab);
@@ -429,7 +427,6 @@ async function readDOCX(file) {
 async function readPDF(file) {
   const ab = await file.arrayBuffer();
 
-  // Build base64 for Claude native PDF vision
   const bytes = new Uint8Array(ab);
   let b64 = '';
   const chunk = 8192;
@@ -438,7 +435,6 @@ async function readPDF(file) {
   }
   const pdfBase64 = btoa(b64);
 
-  // Extract images page-by-page with PDF.js
   const images = {};
   try {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -475,9 +471,7 @@ async function readPDF(file) {
             canvas.height = imgData.height;
             const ctx  = canvas.getContext('2d');
             const imd  = ctx.createImageData(imgData.width, imgData.height);
-            // PDF.js may give RGB or RGBA
             if (imgData.data.length === imgData.width * imgData.height * 3) {
-              // RGB -> RGBA
               const rgba = new Uint8ClampedArray(imgData.width * imgData.height * 4);
               for (let p = 0; p < imgData.width * imgData.height; p++) {
                 rgba[p*4]   = imgData.data[p*3];
@@ -502,10 +496,7 @@ async function readPDF(file) {
   return { kind: 'pdf', data: pdfBase64, images };
 }
 
-// ─── AI Extraction ────────────────────────────────────────────────────────────
 // ─── Chemistry Text Sanitizer ──────────────────────────────────────────────────────────────────────────
-// Converts plain-text chemical notation the LLM sometimes returns into proper Unicode.
-// Handles: NO3^-, PO4^3-, Fe^2+, H2O, CO2, 10^23, x10^-3, etc.
 const SUP = { '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','+':'⁺','-':'⁻' };
 const SUB = { '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉' };
 
@@ -515,40 +506,20 @@ function toSub(s) { return String(s).split('').map(c => SUB[c] || c).join(''); }
 function chemSanitize(text) {
   if (!text) return text;
   let s = String(text);
-
-  // x10^N or x10^-N or *10^N  (scientific notation prose form)
   s = s.replace(/[x×\*]\s*10\^([+-]?\d+)/gi, (_, exp) => '×10' + toSup(exp));
-
-  // Standalone ^{...} or ^(...) superscript blocks
   s = s.replace(/\^\{([^}]+)\}/g, (_, e) => toSup(e));
   s = s.replace(/\^\(([^)]+)\)/g, (_, e) => toSup(e));
-
-  // ^2-, ^3-, ^4-, ^2+, ^3+, ^4+ (charge blocks like PO4^3-)
   s = s.replace(/\^(\d+)([+-])/g, (_, n, sign) => toSup(n) + toSup(sign));
-
-  // ^- and ^+ alone (simple charge)
   s = s.replace(/\^([+-])/g, (_, sign) => toSup(sign));
-
-  // ^N (plain superscript digit after caret)
   s = s.replace(/\^(\d+)/g, (_, n) => toSup(n));
-
-  // _{...} or _(...) subscript blocks
   s = s.replace(/_{([^}]+)}/g, (_, e) => toSub(e));
   s = s.replace(/_\(([^)]+)\)/g, (_, e) => toSub(e));
-
-  // _N single subscript digit
   s = s.replace(/_(\d)/g, (_, n) => toSub(n));
-
-  // Implicit subscripts: letter followed by digit(s) in chemical formula context.
-  // The lookahead must include ^ so NO3^- gets 3 subscripted before the caret is consumed.
-  // Also triggers on already-converted Unicode superscript/subscript ranges and end of string.
   s = s.replace(/([A-Za-z])(\d+)(?=[A-Za-z()\[\]^_²³¹⁰-ⁿ₀-₟+\-]|$)/g,
     (_, letter, digits) => letter + toSub(digits));
-
   return s;
 }
 
-// Apply sanitizer to all text fields of a question object
 function sanitizeQuestion(q) {
   q.body             = chemSanitize(q.body);
   q.suggested_answer = chemSanitize(q.suggested_answer);
@@ -779,7 +750,6 @@ Apply this to every formula, ion, charge, and equation in every question body, a
 
     let parsed = tryParseJSON(raw);
 
-    // If first attempt failed, send the bad output back and ask Claude to fix it
     if (!parsed) {
       setStatus('<span class="spinner"></span> Cleaning up response — retrying…', 'loading');
       const fixResp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -815,7 +785,6 @@ Apply this to every formula, ion, charge, and equation in every question body, a
       return;
     }
 
-    // Calculate per-question points from 100/count BEFORE mapping questions
     const autoPts = Math.round((100 / extracted.length) * 100) / 100;
     document.getElementById('defaultPts').value = autoPts;
     const pts = autoPts;
@@ -863,8 +832,6 @@ function buildCard(q, idx) {
   const div = document.createElement('div');
   div.className = 'q-card';
   div.id = 'qcard-' + q.id;
-
-  const tpColors = {MC:'#6465F1',MR:'#8F37EB',TF:'#6465F1',NUM:'#059669',SA:'#d97706',ESSAY:'#64748b',FILE:'#64748b'};
 
   div.innerHTML = `
     <div class="q-header">
@@ -1014,35 +981,6 @@ function changeType(id, type) {
   saveSession();
 }
 
-// ─── FIB Edit Helpers ──────────────────────────────────────────────────────────
-function setFIBCorrect(id, blankId, choiceIdx) {
-  const q = getQ(id);
-  if (!q || !q.fib_blanks[blankId]) return;
-  q.fib_blanks[blankId].correct = q.fib_blanks[blankId].choices[choiceIdx] || '';
-}
-function updateFIBChoice(id, blankId, choiceIdx, val) {
-  const q = getQ(id);
-  if (!q || !q.fib_blanks[blankId]) return;
-  const bl = q.fib_blanks[blankId];
-  const wasCorrect = bl.choices[choiceIdx] === bl.correct;
-  bl.choices[choiceIdx] = val;
-  if (wasCorrect) bl.correct = val;
-}
-function addFIBChoice(id, blankId) {
-  const q = getQ(id);
-  if (!q || !q.fib_blanks[blankId]) return;
-  q.fib_blanks[blankId].choices.push('');
-  reRenderCard(id); toggleEdit(id);
-}
-function removeFIBChoice(id, blankId, choiceIdx) {
-  const q = getQ(id);
-  if (!q || !q.fib_blanks[blankId]) return;
-  const bl = q.fib_blanks[blankId];
-  if (bl.choices.length <= 1) return;
-  bl.choices.splice(choiceIdx, 1);
-  reRenderCard(id); toggleEdit(id);
-}
-
 function reRenderCard(id) {
   const q = getQ(id);
   if (!q) return;
@@ -1125,7 +1063,6 @@ function updateNumBounds(id) {
   const raw = (document.getElementById('numExact-' + id).value || '').trim();
   if (!raw) return;
 
-  // Parse the value — support plain numbers and scientific notation like 6.022e23
   const val = parseFloat(raw.replace(/×\s*10\^?/i, 'e').replace(/×/g,''));
   if (isNaN(val)) {
     document.getElementById('numPreview-' + id).style.display = 'block';
@@ -1133,27 +1070,21 @@ function updateNumBounds(id) {
     return;
   }
 
-  // Determine sig figs from the input string (count significant digits)
   const sigFigs = countSigFigs(raw);
-
-  // Calculate a tight bounding range based on the last significant digit
   const magnitude = Math.pow(10, Math.floor(Math.log10(Math.abs(val))) - (sigFigs - 1));
   const half = magnitude * 0.5;
   let lo = val - half;
   let hi = val + half;
 
-  // For very large or very small numbers use scientific notation in the rule
   const useExp = Math.abs(val) >= 1e6 || (Math.abs(val) < 0.01 && val !== 0);
   const fmt = n => {
     if (useExp) return n.toExponential(sigFigs + 1);
-    // Round to avoid floating-point noise
     const decimals = Math.max(0, sigFigs - Math.floor(Math.log10(Math.abs(val))) - 1);
     return n.toFixed(decimals + 1);
   };
 
   const rule = '[' + fmt(lo) + ', ' + fmt(hi) + ']';
 
-  // Update state and UI
   const q = getQ(id);
   if (q) q.answers[0] = rule;
   const ruleInput = document.getElementById('numRule-' + id);
@@ -1165,46 +1096,48 @@ function updateNumBounds(id) {
 }
 
 function countSigFigs(s) {
-  // Strip leading sign and spaces
   s = s.trim().replace(/^[+-]/, '');
-  // Handle scientific notation: count sig figs in mantissa only
   const eIdx = s.toLowerCase().indexOf('e');
   if (eIdx !== -1) s = s.substring(0, eIdx);
-  // Remove decimal point
   const noDecimal = s.replace('.', '');
-  // Strip leading zeros
   const stripped = noDecimal.replace(/^0+/, '');
-  // Strip trailing zeros if no decimal point in original
   const hasDot = s.includes('.');
   const cleaned = hasDot ? stripped : stripped.replace(/0+$/, '');
   return Math.max(1, cleaned.length);
 }
 
 // ─── QTI XML Generation ────────────────────────────────────────────────────────
-function numCondition(rule) {
+function numCondition(rule, respId) {
   const s = (rule||'').trim();
+  const r = respId || 'response1';
   const rng = s.match(/^\[([\d.eE+\-]+)\s*,\s*([\d.eE+\-]+)\]$/);
-  if (rng) return `<and><vargte respident="response1">${rng[1]}</vargte><varlte respident="response1">${rng[2]}</varlte></and>`;
+  if (rng) return `<and><vargte respident="${r}">${rng[1]}</vargte><varlte respident="${r}">${rng[2]}</varlte></and>`;
   const mrg = s.match(/^([\d.eE+\-]+)\s*\+-\s*([\d.]+)(%?)$/);
   if (mrg) {
     const v = parseFloat(mrg[1]), m = parseFloat(mrg[2]);
     const lo = mrg[3]==='%' ? v*(1-m/100) : v-m;
     const hi = mrg[3]==='%' ? v*(1+m/100) : v+m;
-    return `<and><vargte respident="response1">${lo}</vargte><varlte respident="response1">${hi}</varlte></and>`;
+    return `<and><vargte respident="${r}">${lo}</vargte><varlte respident="${r}">${hi}</varlte></and>`;
   }
   const n = parseFloat(s);
-  return isNaN(n) ? `<varequal respident="response1">0</varequal>` : `<varequal respident="response1">${n}</varequal>`;
+  return isNaN(n) ? `<varequal respident="${r}">0</varequal>` : `<varequal respident="${r}">${n}</varequal>`;
 }
 
+// ─── itemXML ─────────────────────────────────────────────────────────────────
+// FIX v6.9: All idents are now prefixed with the item's own ident (e.g. QUE_0001_response1)
+// to ensure global uniqueness across the QTI file. Canvas silently fails imports
+// when any ident is duplicated — this was the root cause of quizzes not appearing after import.
 function itemXML(q, num, imageMap) {
   const ident = 'QUE_' + String(num).padStart(4,'0');
   const labels = ['A','B','C','D','E'];
   const typeMap = {MC:'multiple_choice_question',MR:'multiple_answers_question',TF:'true_false_question',NUM:'numerical_question',SA:'short_answer_question',FIB:'fill_in_multiple_blanks_question',ESSAY:'essay_question',FILE:'file_upload_question'};
   const qt = typeMap[q.type] || 'multiple_choice_question';
 
+  // Unique response ident scoped to this item
+  const respId = ident + '_response1';
+
   let pres = '', resp = '';
 
-  // Image inline HTML (embedded in question body)
   let imgHtml = '';
   if (q.image_ref && imageMap && imageMap[q.image_ref]) {
     const im = imageMap[q.image_ref];
@@ -1216,48 +1149,48 @@ function itemXML(q, num, imageMap) {
   if (['MC','TF','MR'].includes(q.type)) {
     const card = q.type==='MR' ? 'Multiple' : 'Single';
     const choices = q.answers.map((a,i) => `<response_label ident="${labels[i]}"><material><mattext texttype="text/html">${esc(a)}</mattext></material></response_label>`).join('');
-    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_lid ident="response1" rcardinality="${card}"><render_choice>${choices}</render_choice></response_lid></presentation>`;
+    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_lid ident="${respId}" rcardinality="${card}"><render_choice>${choices}</render_choice></response_lid></presentation>`;
     if (q.type === 'MR') {
       const cl = q.correct.map(i => labels[i]).filter(Boolean);
       const share = cl.length ? Math.round(100/cl.length) : 100;
-      const conds = cl.map(l => `<respcondition continue="Yes"><conditionvar><varequal respident="response1">${l}</varequal></conditionvar><setvar action="Add" varname="SCORE">${share}</setvar></respcondition>`).join('');
+      const conds = cl.map(l => `<respcondition continue="Yes"><conditionvar><varequal respident="${respId}">${l}</varequal></conditionvar><setvar action="Add" varname="SCORE">${share}</setvar></respcondition>`).join('');
       resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>${conds}</resprocessing>`;
     } else {
       const cl = labels[q.correct[0]] || 'A';
-      resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="response1">${cl}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition></resprocessing>`;
+      resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar><varequal respident="${respId}">${cl}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition></resprocessing>`;
     }
   } else if (q.type === 'NUM') {
-    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_num ident="response1" rcardinality="Single"><render_fib fibtype="Decimal"/></response_num></presentation>`;
-    resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar>${numCondition(q.answers[0])}</conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition></resprocessing>`;
+    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_num ident="${respId}" rcardinality="Single"><render_fib fibtype="Decimal"/></response_num></presentation>`;
+    resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes><respcondition continue="No"><conditionvar>${numCondition(q.answers[0], respId)}</conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition></resprocessing>`;
   } else if (q.type === 'SA') {
-    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_str ident="response1" rcardinality="Single"><render_fib/></response_str></presentation>`;
-    const conds = q.answers.map(a => `<respcondition continue="No"><conditionvar><varequal respident="response1" case="No">${esc(a)}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition>`).join('');
-    resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>${conds}</resprocessing>`;
+    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_str ident="${respId}" rcardinality="Single"><render_fib/></response_str></presentation>`;
+    const conds = q.answers.map(a => `<respcondition continue="No"><conditionvar><varequal respident="${respId}" case="No">${esc(a)}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition>`).join('');
+    resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outputs>${conds}</resprocessing>`;
   } else if (q.type === 'FIB') {
     const blankIds = Object.keys(q.fib_blanks || {});
-    // Each blank is a text input field — students type their answer
+    // Prefix each blank's response ident with the item ident to ensure global uniqueness
     const respStrs = blankIds.map(bid =>
-      `<response_str ident="response_${bid}" rcardinality="Single"><render_fib/></response_str>`
+      `<response_str ident="${ident}_response_${bid}" rcardinality="Single"><render_fib/></response_str>`
     ).join('');
     pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material>${respStrs}</presentation>`;
     const numBlanks = blankIds.length || 1;
     const sharePerBlank = Math.round(100 / numBlanks);
-    // Match against the single correct answer string, case-insensitive
     const conditions = blankIds.map(bid => {
       const bl = q.fib_blanks[bid] || { correct: '' };
-      return `<respcondition continue="Yes"><conditionvar><varequal respident="response_${bid}" case="No">${esc(bl.correct)}</varequal></conditionvar><setvar action="Add" varname="SCORE">${sharePerBlank}</setvar></respcondition>`;
+      return `<respcondition continue="Yes"><conditionvar><varequal respident="${ident}_response_${bid}" case="No">${esc(bl.correct)}</varequal></conditionvar><setvar action="Add" varname="SCORE">${sharePerBlank}</setvar></respcondition>`;
     }).join('');
     resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes>${conditions}</resprocessing>`;
   } else {
     // ESSAY or FILE
-    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_str ident="response1" rcardinality="Single"><render_fib rows="5" columns="50"/></response_str></presentation>`;
+    pres = `<presentation><material><mattext texttype="text/html">${bodyHtml}</mattext></material><response_str ident="${respId}" rcardinality="Single"><render_fib rows="5" columns="50"/></response_str></presentation>`;
     resp = `<resprocessing><outcomes><decvar maxvalue="100" minvalue="0" varname="SCORE" vartype="Decimal"/></outcomes></resprocessing>`;
   }
 
+  // Feedback idents prefixed with item ident to ensure global uniqueness
   let fbXml = '';
-  if (q.feedback.general) fbXml += `<itemfeedback ident="general_fb"><flow_mat><material><mattext>${esc(q.feedback.general)}</mattext></material></flow_mat></itemfeedback>`;
-  if (q.feedback.correct) fbXml += `<itemfeedback ident="correct_fb"><flow_mat><material><mattext>${esc(q.feedback.correct)}</mattext></material></flow_mat></itemfeedback>`;
-  if (q.feedback.incorrect) fbXml += `<itemfeedback ident="incorrect_fb"><flow_mat><material><mattext>${esc(q.feedback.incorrect)}</mattext></material></flow_mat></itemfeedback>`;
+  if (q.feedback.general)   fbXml += `<itemfeedback ident="${ident}_general_fb"><flow_mat><material><mattext>${esc(q.feedback.general)}</mattext></material></flow_mat></itemfeedback>`;
+  if (q.feedback.correct)   fbXml += `<itemfeedback ident="${ident}_correct_fb"><flow_mat><material><mattext>${esc(q.feedback.correct)}</mattext></material></flow_mat></itemfeedback>`;
+  if (q.feedback.incorrect) fbXml += `<itemfeedback ident="${ident}_incorrect_fb"><flow_mat><material><mattext>${esc(q.feedback.incorrect)}</mattext></material></flow_mat></itemfeedback>`;
 
   return `<item ident="${ident}" title="${esc(q.title||'Question '+num)}">
     <itemmetadata><qtimetadata>
@@ -1296,8 +1229,6 @@ function assessmentXML(title, desc, settings, aId, imageMap) {
 }
 
 function manifestXML(aId, filename, imageKeys) {
-  // Each image used in the quiz must be declared as a <file> dependency
-  // so Canvas knows to serve it when the question renders.
   const imgFileTags = (imageKeys || []).map(key => {
     const im  = extractedImages[key];
     const ext = (im && im.mime) ? im.mime.split('/')[1] || 'png' : 'png';
@@ -1342,7 +1273,6 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
 
   const aId     = 'assessment_' + Date.now();
   const fname   = aId + '.xml';
-  // Collect only images actually referenced by questions
   const usedImgKeys = [...new Set(questions.map(q => q.image_ref).filter(r => r && extractedImages[r]))];
   const aXml  = assessmentXML(title, '', settings, aId, extractedImages);
   const mXml  = manifestXML(aId, fname, usedImgKeys);
@@ -1351,7 +1281,6 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
   zip.file('imsmanifest.xml', mXml);
   zip.file(fname, aXml);
 
-  // Embed images into ZIP
   for (const key of usedImgKeys) {
     const im  = extractedImages[key];
     const ext = (im.mime || 'image/png').split('/')[1] || 'png';
@@ -1460,7 +1389,6 @@ async function checkSettingsPassword() {
       err.textContent = 'Incorrect password.';
       return;
     }
-    // Password correct — show model pane
     document.getElementById('settingsPasswordPane').style.display = 'none';
     document.getElementById('settingsModelPane').style.display    = '';
 
@@ -1478,13 +1406,11 @@ async function checkSettingsPassword() {
 
 async function saveSettingsModel() {
   const model   = document.getElementById('settingsModelSel').value;
-  const pw      = document.getElementById('settingsPasswordInput').value.trim() || '_session_';
   const statusEl = document.getElementById('settingsSaveStatus');
 
   window.activeModel = model;
   localStorage.setItem(MODEL_STORAGE_KEY, model);
 
-  // Optionally persist to GAS too (nice to have, not required)
   try {
     await fetch(VAULT_URL, {
       method: 'POST',
@@ -1575,22 +1501,18 @@ function handleImgUpload(input) {
   if (!input.files || !input.files[0]) return;
   const file = input.files[0];
   const mime = file.type || 'image/png';
-  const ext  = file.name.split('.').pop().toLowerCase();
   const reader = new FileReader();
   reader.onload = e => {
     const b64 = e.target.result.split(',')[1];
-    // Generate a unique key for the uploaded image
     const key = 'upload_' + String(Object.keys(extractedImages).length + 1).padStart(3, '0');
     extractedImages[key] = { data: b64, mime, originalName: file.name };
-    // Immediately assign to the question and close
     assignImgToQuestion(key);
-    // Reset the input so the same file can be re-selected if needed
     input.value = '';
   };
   reader.readAsDataURL(file);
 }
 
-// ─── Session Persistence (survives refresh, clears on tab close) ───────────────
+// ─── Session Persistence ───────────────────────────────────────────────────────
 const SESSION_Q_KEY   = 'qti_session_questions';
 const SESSION_IMG_KEY = 'qti_session_images';
 const SESSION_META_KEY = 'qti_session_meta';
@@ -1598,7 +1520,6 @@ const SESSION_META_KEY = 'qti_session_meta';
 function saveSession() {
   try {
     localStorage.setItem(SESSION_Q_KEY, JSON.stringify(questions));
-    // Images can be large — try to store, silently skip if over quota
     try {
       localStorage.setItem(SESSION_IMG_KEY, JSON.stringify(extractedImages));
     } catch(e) {
@@ -1633,7 +1554,6 @@ function loadSession() {
       if (meta.fileName)   document.getElementById('chosenFileName').textContent = meta.fileName;
     }
 
-    // Bump nextId past all restored ids so new questions don't collide
     const maxId = questions.reduce((m, q) => Math.max(m, q.id), 0);
     nextId = maxId + 1;
 
@@ -1665,13 +1585,9 @@ function clearSession() {
   ['settingsCard','questionsCard','exportCard'].forEach(hide);
 }
 
-// Auto-save whenever questions array changes — hook into key mutation points
 window.addEventListener('beforeunload', () => { if (questions.length) saveSession(); });
 
 // ─── Workbench Save / Load ─────────────────────────────────────────────────────
-// "Save Session" embeds a _workbench.json inside the zip so you can reload later.
-// "Load Saved Session" reads that file back and restores full state.
-
 document.getElementById('saveWorkbenchBtn').addEventListener('click', async () => {
   if (!questions.length) {
     alert('No questions to save yet. Extract questions first.');
@@ -1679,7 +1595,6 @@ document.getElementById('saveWorkbenchBtn').addEventListener('click', async () =
   }
   const title = document.getElementById('quizTitle').value.trim() || 'Quiz';
 
-  // Build workbench payload — questions + images + all meta
   const workbench = {
     version: 2,
     savedAt: new Date().toISOString(),
@@ -1703,7 +1618,6 @@ document.getElementById('saveWorkbenchBtn').addEventListener('click', async () =
   const zip = new JSZip();
   zip.file('_workbench.json', JSON.stringify(workbench));
 
-  // Also include images as files so the zip is self-contained
   for (const [key, im] of Object.entries(extractedImages)) {
     const ext = (im.mime || 'image/png').split('/')[1] || 'png';
     zip.file('images/' + key + '.' + ext, im.data, { base64: true });
@@ -1739,7 +1653,6 @@ async function loadWorkbenchZip(input) {
 
     const wb = JSON.parse(await wbFile.async('string'));
 
-    // Restore state
     questions       = wb.questions || [];
     extractedImages = wb.extractedImages || {};
 
@@ -1786,7 +1699,7 @@ async function loadWorkbenchZip(input) {
 }
 
 // ─── Workbench Merge ─────────────────────────────────────────────────────────────────────────────────
-let mergeQueue = []; // [{ filename, questions, images }]
+let mergeQueue = [];
 
 function mergeStatus(msg, type) {
   const el = document.getElementById('mergeStatus');
@@ -1841,7 +1754,6 @@ async function addMergeFiles(input) {
   mergeStatus('<span class="spinner"></span> Reading file(s)…', 'loading');
 
   for (const file of Array.from(input.files)) {
-    // Skip duplicates by filename
     if (mergeQueue.find(e => e.filename === file.name)) continue;
     try {
       const ab  = await file.arrayBuffer();
@@ -1864,7 +1776,6 @@ async function addMergeFiles(input) {
   input.value = '';
   refreshMergeUI();
 
-  // Auto-suggest a title from the first file's meta if field is empty
   const titleInput = document.getElementById('mergeTitleInput');
   if (!titleInput.value) titleInput.value = 'Combined Question Bank';
 
@@ -1878,7 +1789,6 @@ async function doMergeExport() {
 
   mergeStatus('<span class="spinner"></span> Merging and building QTI…', 'loading');
 
-  // Combine questions and images, rewriting image keys per-source to avoid collisions
   const mergedImages = {};
   const mergedQuestions = [];
   let idCounter = 1;
@@ -1887,7 +1797,6 @@ async function doMergeExport() {
     const entry   = mergeQueue[fi];
     const prefix  = 'src' + (fi + 1) + '_';
 
-    // Remap image keys for this source
     const keyMap = {};
     for (const [key, im] of Object.entries(entry.images)) {
       const newKey  = prefix + key;
@@ -1895,9 +1804,8 @@ async function doMergeExport() {
       mergedImages[newKey] = im;
     }
 
-    // Copy questions, rewriting image_ref and ids
     for (const q of entry.questions) {
-      const newQ = JSON.parse(JSON.stringify(q)); // deep copy
+      const newQ = JSON.parse(JSON.stringify(q));
       newQ.id       = idCounter++;
       if (newQ.image_ref && keyMap[newQ.image_ref]) {
         newQ.image_ref = keyMap[newQ.image_ref];
@@ -1906,12 +1814,10 @@ async function doMergeExport() {
     }
   }
 
-  // Build QTI using existing assessmentXML + manifestXML functions
   const aId   = 'assessment_' + Date.now();
   const fname = aId + '.xml';
   const usedImgKeys = [...new Set(mergedQuestions.map(q => q.image_ref).filter(r => r && mergedImages[r]))];
 
-  // Temporarily swap globals so existing QTI builders work
   const savedQuestions        = questions;
   const savedExtractedImages  = extractedImages;
   questions       = mergedQuestions;
@@ -1921,7 +1827,6 @@ async function doMergeExport() {
   const aXml  = assessmentXML(title, '', settings, aId, mergedImages);
   const mXml  = manifestXML(aId, fname, usedImgKeys);
 
-  // Restore globals
   questions       = savedQuestions;
   extractedImages = savedExtractedImages;
 
@@ -1948,15 +1853,9 @@ async function doMergeExport() {
 }
 
 // ─── Blooket CSV Export ────────────────────────────────────────────────────────────────────────────────
-// Blooket format: Question #, Question Text, Answer 1, Answer 2, Answer 3, Answer 4,
-//                 Time Limit (sec), Correct Answer(s)
-// All questions must be MC. ESSAY/FILE are skipped.
-// Images cannot be embedded in Blooket CSV — note is shown to user.
-
 function csvCell(val) {
   if (val === null || val === undefined) return '';
   const s = String(val);
-  // Wrap in quotes if contains comma, quote, or newline
   if (s.includes(',') || s.includes('"') || s.includes('\n')) {
     return '"' + s.replace(/"/g, '""') + '"';
   }
@@ -1976,13 +1875,13 @@ function questionToBlooketRows(q, qNum) {
   const DEFAULT_TIME = 20;
   const rows = [];
 
-  if (q.type === 'ESSAY' || q.type === 'FILE') return rows; // skip — no MC equivalent
+  if (q.type === 'ESSAY' || q.type === 'FILE') return rows;
 
   if (q.type === 'MC' || q.type === 'TF') {
     const answers = q.answers.filter(a => a && String(a).trim());
     if (answers.length < 2) return rows;
-    const correctIdx = q.correct[0]; // 0-based
-    const correctNum = correctIdx + 1; // 1-based
+    const correctIdx = q.correct[0];
+    const correctNum = correctIdx + 1;
     rows.push([
       qNum,
       q.body,
@@ -1993,7 +1892,6 @@ function questionToBlooketRows(q, qNum) {
   }
 
   else if (q.type === 'MR') {
-    // Multiple-select: Blooket supports comma-separated correct answers
     const answers = q.answers.filter(a => a && String(a).trim());
     if (answers.length < 2) return rows;
     const correctNums = q.correct.map(i => i + 1).join(',');
@@ -2007,16 +1905,13 @@ function questionToBlooketRows(q, qNum) {
   }
 
   else if (q.type === 'NUM') {
-    // Convert to MC using correct answer + distractors
     const correct = q.suggested_answer
-      ? q.suggested_answer.split('(')[0].trim() // strip the sig-fig note
+      ? q.suggested_answer.split('(')[0].trim()
       : (q.answers[0] || '').replace(/[\[\]]/g, '').split(',')[0].trim();
     const distractors = (q.blooket_distractors || []).slice(0, 3);
-    // Pad distractors if fewer than 3
     while (distractors.length < 3) distractors.push('—');
-    // Build 4 choices: shuffle correct + distractors, track which position correct ends up in
     const pool = shuffle([correct, ...distractors.slice(0, 3)]);
-    const correctPos = pool.indexOf(correct) + 1; // 1-based
+    const correctPos = pool.indexOf(correct) + 1;
     rows.push([
       qNum,
       q.body,
@@ -2027,7 +1922,6 @@ function questionToBlooketRows(q, qNum) {
   }
 
   else if (q.type === 'SA') {
-    // Convert to MC using first acceptable answer + distractors
     const correct = q.answers[0] || q.suggested_answer || '';
     if (!correct) return rows;
     const distractors = (q.blooket_distractors || []).slice(0, 3);
@@ -2044,7 +1938,6 @@ function questionToBlooketRows(q, qNum) {
   }
 
   else if (q.type === 'FIB') {
-    // One Blooket question per blank
     const blankIds = Object.keys(q.fib_blanks || {});
     blankIds.forEach((bid, bi) => {
       const bl = q.fib_blanks[bid] || {};
@@ -2052,7 +1945,6 @@ function questionToBlooketRows(q, qNum) {
       if (!correct) return;
       const distractors = (bl.blooket_distractors || []).slice(0, 3);
       while (distractors.length < 3) distractors.push('—');
-      // Body: replace [blank_id] markers with underscores for readability
       let body = q.body.replace(new RegExp('\\[' + bid + '\\]', 'g'), '______');
       if (blankIds.length > 1) body += ' (' + (bi + 1) + '/' + blankIds.length + ')';
       const pool = shuffle([correct, ...distractors.slice(0, 3)]);
@@ -2077,7 +1969,6 @@ document.getElementById('blooketBtn').addEventListener('click', () => {
   }
 
   const lines = [];
-  // Header row (matches Blooket template exactly)
   lines.push([
     'Question #', 'Question Text',
     'Answer 1', 'Answer 2', 'Answer 3\n(Optional)', 'Answer 4\n(Optional)',
@@ -2094,7 +1985,7 @@ document.getElementById('blooketBtn').addEventListener('click', () => {
   });
 
   const csv  = lines.join('\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }); // BOM for Excel compat
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
@@ -2113,7 +2004,7 @@ document.getElementById('blooketBtn').addEventListener('click', () => {
 
 </script>
 <footer style="text-align:center;padding:28px 16px;font-size:12px;color:#888;border-top:1px solid #e0e0f0;margin-top:12px">
-  Created by <strong style="color:#201D52">Chris Leatherwood</strong> &mdash; Tyler, TX &nbsp;|&nbsp; &copy; 2025&ndash;2026 &nbsp;|&nbsp; v6.8
+  Created by <strong style="color:#201D52">Chris Leatherwood</strong> &mdash; Tyler, TX &nbsp;|&nbsp; &copy; 2025&ndash;2026 &nbsp;|&nbsp; v6.9
 </footer>
 <!-- Settings Modal -->
 <div id="settingsOverlay" style="display:none;position:fixed;inset:0;background:rgba(32,29,82,.55);z-index:2000;backdrop-filter:blur(3px)" onclick="handleSettingsOverlayClick(event)"></div>
