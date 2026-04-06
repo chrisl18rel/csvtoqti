@@ -583,7 +583,7 @@ async function doExtract() {
   }
   catch(err) { setStatus('⚠ Could not read file: ' + err.message, 'error'); return; }
 
-  setStatus('<span class="spinner"></span> Sending to Claude — extracting questions…', 'loading');
+  setStatus('<span class="spinner"></span> Analyzing with AI — extracting questions…', 'loading');
 
   const allowSA       = document.getElementById('allowSA').checked;
   const allowFeedback = document.getElementById('allowFeedback').checked;
