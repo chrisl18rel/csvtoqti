@@ -653,7 +653,8 @@ Rules for each type — always fill "correct" and "suggested_answer" to the best
   Each separate answer gets its own blank. Do NOT collapse multi-part questions into a single NUM or SA.
   Canvas FIB blanks are TEXT INPUT FIELDS — students type their answer. There are NO dropdown choices.
   Each blank has exactly ONE correct answer string. Do not generate lists of choices or distractors.
-  • body = the question text with [blank_id] markers, one per required answer, using descriptive snake_case names.
+  • body = the question text with [blank_id] markers, one per required answer, using short descriptive snake_case names.
+    CRITICAL: blank_id names MUST NEVER start with "response_". Never write [response_five_type] or [response_main_type]. Use only short names like [five_type], [main_type], [ph_blank], [product], etc.
     Example: "What is the pH [ph_blank] and pOH [poh_blank] of this solution?"
     Example: "The negatively charged [particle1] orbits the nucleus while the positively charged [particle2] and neutrally charged [particle3] are in the nucleus."
   • fib_blanks = object where each key is a blank_id and value has a "correct" field and a "blooket_distractors" field.
