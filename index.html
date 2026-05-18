@@ -142,6 +142,20 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
     <div id="resumeStatus" class="status-msg" style="margin-top:10px"></div>
   </div>
 
+
+  <!-- IMPORT QTI CARD -->
+  <div class="card" id="importQtiCard">
+    <h2><span class="step-dot" style="background:#0891b2">⬆</span>Import Canvas QTI Export</h2>
+    <p style="font-size:13px;color:#555;margin:0 0 12px">Upload a QTI .zip file previously exported from Canvas to load it into the workbench for editing, then re-export.</p>
+    <div class="btnrow">
+      <label class="btn btn-indigo" style="cursor:pointer;margin:0">
+        📂 Load Canvas QTI Export
+        <input type="file" id="importQtiFileInput" accept=".zip" style="display:none" onchange="loadCanvasQtiZip(this)">
+      </label>
+    </div>
+    <div id="importQtiStatus" class="status-msg" style="margin-top:10px"></div>
+  </div>
+
   <!-- MERGE CARD -->
   <div class="card" id="mergeCard">
     <h2><span class="step-dot" style="background:#d97706">⊕</span>Merge Workbench Files → QTI</h2>
@@ -1587,6 +1601,267 @@ function clearSession() {
 }
 
 window.addEventListener('beforeunload', () => { if (questions.length) saveSession(); });
+
+// ─── Canvas QTI Import Parser ─────────────────────────────────────────────────
+// Parses a QTI .zip exported directly from Canvas and loads it into the workbench.
+// Supports: MC, MR, TF, NUM, SA, FIB, ESSAY, FILE question types.
+// Images embedded in the zip are extracted and mapped back to questions.
+
+async function loadCanvasQtiZip(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const statusEl = document.getElementById('importQtiStatus');
+  statusEl.className = 'status-msg show status-loading';
+  statusEl.innerHTML = '<span class="spinner"></span> Reading QTI file…';
+
+  try {
+    const ab  = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(ab);
+
+    // Find the manifest to locate the assessment XML
+    const manifestFile = zip.file('imsmanifest.xml');
+    if (!manifestFile) throw new Error('No imsmanifest.xml found. Make sure this is a Canvas QTI export zip.');
+    const manifestText = await manifestFile.async('string');
+
+    // Extract the href of the assessment XML from the manifest
+    const hrefMatch = manifestText.match(/type="imsqti_xmlv1p2"[^>]*href="([^"]+)"/);
+    if (!hrefMatch) throw new Error('Could not locate assessment XML in manifest.');
+    const assessHref = hrefMatch[1];
+
+    const assessFile = zip.file(assessHref);
+    if (!assessFile) throw new Error('Assessment XML file "' + assessHref + '" not found in zip.');
+    const assessText = await assessFile.async('string');
+
+    // Extract quiz title from assessment
+    const titleMatch = assessText.match(/<assessment[^>]*title="([^"]*)"/) ;
+    const quizTitle  = titleMatch ? qtiDecodeEntities(titleMatch[1]) : 'Imported Quiz';
+
+    // Extract all images from the zip
+    const importedImages = {};
+    const mimeMap = { png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif', bmp:'image/bmp', svg:'image/svg+xml' };
+    for (const [path, zipEntry] of Object.entries(zip.files)) {
+      if (zipEntry.dir) continue;
+      const lower = path.toLowerCase();
+      const ext   = lower.split('.').pop();
+      if (!mimeMap[ext]) continue;
+      // Only grab files in an images/ folder or root-level images
+      const b64  = await zipEntry.async('base64');
+      const key  = path.replace(/^images\//, '').replace(/\.[^.]+$/, '')
+                       .replace(/[^a-z0-9_]/gi, '_');
+      importedImages[key] = { data: b64, mime: mimeMap[ext], originalName: path };
+    }
+
+    // Parse each <item> element
+    const itemRegex = /<item\s[^>]*ident="([^"]*)"[^>]*>([\s\S]*?)<\/item>/g;
+    const parsedQuestions = [];
+    let match;
+
+    while ((match = itemRegex.exec(assessText)) !== null) {
+      const itemIdent = match[1];
+      const itemBody  = match[2];
+      const q = parseQtiItem(itemIdent, itemBody, importedImages);
+      if (q) parsedQuestions.push(q);
+    }
+
+    if (!parsedQuestions.length) throw new Error('No questions found in the QTI file.');
+
+    // Replace workbench state
+    questions       = parsedQuestions;
+    extractedImages = importedImages;
+    nextId = questions.reduce((m, q) => Math.max(m, q.id), 0) + 1;
+
+    document.getElementById('quizTitle').value = quizTitle;
+    document.getElementById('defaultPts').value = questions.length ? questions[0].points : 1;
+
+    renderAllQuestions();
+    updateQCount();
+    saveSession();
+
+    const imgCount = Object.keys(importedImages).length;
+    document.getElementById('extractSummary').innerHTML =
+      '<strong>' + questions.length + ' questions imported from Canvas QTI</strong>' +
+      (imgCount ? ' · ' + imgCount + ' image(s) loaded' : '') +
+      ' — review and edit below, then re-export.';
+
+    ['settingsCard','questionsCard','exportCard'].forEach(show);
+    document.getElementById('settingsCard').scrollIntoView({ behavior:'smooth', block:'start' });
+
+    statusEl.className = 'status-msg show status-done';
+    statusEl.innerHTML = '✅ Imported ' + questions.length + ' questions from "' + file.name + '"' +
+      (imgCount ? ' — ' + imgCount + ' image(s) loaded.' : '.');
+
+  } catch(err) {
+    statusEl.className = 'status-msg show status-error';
+    statusEl.innerHTML = '⚠ ' + err.message;
+  }
+  input.value = '';
+}
+
+function qtiDecodeEntities(s) {
+  return String(s||'')
+    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+    .replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g,' ');
+}
+
+function parseQtiItem(ident, body, imageMap) {
+  // Question type from metadata
+  const qtMatch   = body.match(/<fieldlabel>question_type<\/fieldlabel><fieldentry>([^<]+)<\/fieldentry>/);
+  const ptsMatch  = body.match(/<fieldlabel>points_possible<\/fieldlabel><fieldentry>([^<]+)<\/fieldentry>/);
+  const titleMatch= body.match(/^[\s\S]*?ident="[^"]*"\s+title="([^"]*)"/);
+
+  // Pull title from the outer item tag — re-match since body doesn't include the opening tag attrs
+  // We'll use ident as fallback title
+  const qtRaw  = qtMatch  ? qtMatch[1].trim()  : 'multiple_choice_question';
+  const pts    = ptsMatch ? parseFloat(ptsMatch[1]) : 1;
+
+  // Map Canvas question_type string → our internal type
+  const typeMap = {
+    'multiple_choice_question':       'MC',
+    'true_false_question':            'TF',
+    'multiple_answers_question':      'MR',
+    'numerical_question':             'NUM',
+    'short_answer_question':          'SA',
+    'fill_in_multiple_blanks_question':'FIB',
+    'essay_question':                 'ESSAY',
+    'file_upload_question':           'FILE'
+  };
+  const type = typeMap[qtRaw] || 'MC';
+
+  // Extract question body text from <mattext>
+  const mattextMatch = body.match(/<material>\s*<mattext[^>]*>([\s\S]*?)<\/mattext>\s*<\/material>/);
+  let rawBody = mattextMatch ? mattextMatch[1] : '';
+
+  // Detect and map image reference
+  let image_ref = '';
+  const imgSrcMatch = rawBody.match(/src="\$IMS-CC-FILEBASE\$\/images\/([^"]+)"/);
+  if (imgSrcMatch) {
+    const imgFilename = imgSrcMatch[1]; // e.g. "img_001.png"
+    const imgKey = imgFilename.replace(/\.[^.]+$/, '').replace(/[^a-z0-9_]/gi, '_');
+    if (imageMap[imgKey]) image_ref = imgKey;
+    // Strip the img tag from the body text
+    rawBody = rawBody.replace(/<img[^>]*\$IMS-CC-FILEBASE\$[^>]*>/gi, '').trim();
+  }
+
+  const bodyText = qtiDecodeEntities(rawBody.replace(/<[^>]+>/g, '').trim());
+
+  // Feedback
+  const fbGenMatch  = body.match(/ident="[^"]*general_fb"[^>]*>[\s\S]*?<mattext[^>]*>([\s\S]*?)<\/mattext>/);
+  const fbCorMatch  = body.match(/ident="[^"]*correct_fb"[^>]*>[\s\S]*?<mattext[^>]*>([\s\S]*?)<\/mattext>/);
+  const fbIncMatch  = body.match(/ident="[^"]*incorrect_fb"[^>]*>[\s\S]*?<mattext[^>]*>([\s\S]*?)<\/mattext>/);
+  const feedback = {
+    general:   fbGenMatch ? qtiDecodeEntities(fbGenMatch[1]) : '',
+    correct:   fbCorMatch ? qtiDecodeEntities(fbCorMatch[1]) : '',
+    incorrect: fbIncMatch ? qtiDecodeEntities(fbIncMatch[1]) : ''
+  };
+
+  let answers = [], correct = [], fib_blanks = {}, suggested_answer = '';
+
+  if (type === 'MC' || type === 'TF' || type === 'MR') {
+    // Extract response labels
+    const labelRegex = /<response_label\s+ident="([^"]+)"[\s\S]*?<mattext[^>]*>([\s\S]*?)<\/mattext>/g;
+    const labelMap   = {}; // ident → index
+    let lm;
+    while ((lm = labelRegex.exec(body)) !== null) {
+      const labelIdent = lm[1];
+      const labelText  = qtiDecodeEntities(lm[2].replace(/<[^>]+>/g,'').trim());
+      if (labelIdent === 'undefined' || !labelText) continue;
+      labelMap[labelIdent] = answers.length;
+      answers.push(labelText);
+    }
+
+    // Extract correct answers from resprocessing
+    if (type === 'MR') {
+      const condRegex = /<varequal respident="[^"]*"[^>]*>([^<]+)<\/varequal>[\s\S]*?<setvar[^>]*>(\d+)<\/setvar>/g;
+      let cm;
+      while ((cm = condRegex.exec(body)) !== null) {
+        const labelId = cm[1].trim();
+        if (labelMap[labelId] !== undefined) correct.push(labelMap[labelId]);
+      }
+    } else {
+      const corrMatch = body.match(/<varequal respident="[^"]*">([^<]+)<\/varequal>/);
+      if (corrMatch) {
+        const labelId = corrMatch[1].trim();
+        if (labelMap[labelId] !== undefined) correct = [labelMap[labelId]];
+      }
+    }
+    suggested_answer = correct.map(i => answers[i]).filter(Boolean).join(', ');
+  }
+
+  else if (type === 'NUM') {
+    // Extract range from resprocessing
+    const gteMatch = body.match(/<vargte respident="[^"]*">([^<]+)<\/vargte>/);
+    const lteMatch = body.match(/<varlte respident="[^"]*">([^<]+)<\/varlte>/);
+    const eqMatch  = body.match(/<varequal respident="[^"]*">([^<]+)<\/varequal>/);
+    if (gteMatch && lteMatch) {
+      answers = ['[' + gteMatch[1].trim() + ', ' + lteMatch[1].trim() + ']'];
+      suggested_answer = gteMatch[1].trim() + ' to ' + lteMatch[1].trim();
+    } else if (eqMatch) {
+      answers = [eqMatch[1].trim()];
+      suggested_answer = eqMatch[1].trim();
+    }
+    correct = [];
+  }
+
+  else if (type === 'SA') {
+    // Each varequal is an acceptable answer
+    const saRegex = /<varequal respident="[^"]*"[^>]*>([^<]+)<\/varequal>/g;
+    let sm;
+    while ((sm = saRegex.exec(body)) !== null) {
+      answers.push(qtiDecodeEntities(sm[1].trim()));
+    }
+    suggested_answer = answers[0] || '';
+    correct = [];
+  }
+
+  else if (type === 'FIB') {
+    // Extract blank IDs from response_str idents
+    // Canvas exports them as "response_blankid" or scoped "QUE_0001_response_blankid"
+    const respStrRegex = /<response_str\s+ident="([^"]+)"/g;
+    let rsm;
+    const blankIdents = []; // raw idents from XML
+    while ((rsm = respStrRegex.exec(body)) !== null) {
+      blankIdents.push(rsm[1]);
+    }
+
+    // Extract correct answers — keyed by the raw respident in resprocessing
+    const condRegex = /<varequal respident="([^"]+)"[^>]*>([^<]+)<\/varequal>/g;
+    const answersByRespident = {};
+    let cm2;
+    while ((cm2 = condRegex.exec(body)) !== null) {
+      answersByRespident[cm2[1]] = qtiDecodeEntities(cm2[2].trim());
+    }
+
+    // Build fib_blanks: strip "response_" prefix and any "QUE_XXXX_" scope prefix to get clean blank_id
+    for (const rawIdent of blankIdents) {
+      // Strip item scope prefix like "QUE_0001_"
+      let cleanIdent = rawIdent.replace(/^QUE_\d+_/, '');
+      // Strip leading "response_"
+      let blankId = cleanIdent.replace(/^response_/, '');
+      const correctVal = answersByRespident[rawIdent] || answersByRespident[cleanIdent] || '';
+      fib_blanks[blankId] = { correct: correctVal, blooket_distractors: [] };
+    }
+
+    answers  = [];
+    correct  = [];
+    suggested_answer = Object.entries(fib_blanks).map(([k,v]) => k + ': ' + v.correct).join(', ');
+  }
+
+  return {
+    id:                 nextId++,
+    type,
+    title:              '',
+    points:             pts,
+    body:               bodyText,
+    answers,
+    correct,
+    fib_blanks,
+    image_ref,
+    suggested_answer,
+    blooket_distractors: [],
+    feedback
+  };
+}
 
 // ─── Workbench Save / Load ─────────────────────────────────────────────────────
 document.getElementById('saveWorkbenchBtn').addEventListener('click', async () => {
