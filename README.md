@@ -23,7 +23,7 @@ For FIB questions, type `[blank_id]` markers directly into the question text (e.
 ## Setup
 
 1. Host `index.html` anywhere (GitHub Pages works) or open it locally in a modern browser.
-2. Create the key vault: new Google Apps Script project → paste in `vault-apps-script.gs` → set the two Script Properties (`ANTHROPIC_API_KEY`, `SETTINGS_PASSWORD`) → deploy as a web app ("Execute as: Me", "Who has access: Anyone") → put the deployment URL in the `VAULT_URL` constant in `index.html`.
+2. Create the key vault: new Google Apps Script project → paste in `api-key-vault.gs` → set the two Script Properties (`anthropic_api_key`, `settings_password`) → deploy as a web app ("Execute as: Me", "Who has access: Anyone") → put the deployment URL in the `VAULT_URL` constant in `index.html`.
 3. Open the site, click the ⚙ gear, and enter your settings password once. The AI unlocks and stays unlocked on that device.
 
 The vault never reveals the API key without the password, and the password is only ever sent in POST bodies. The AI model (Claude Sonnet 5 by default; Opus 5 and Haiku 4.5 available) is selected in the same settings modal.
@@ -44,7 +44,9 @@ Point values: if the source document states point values, the AI uses them; othe
 
 ## Files
 
-`index.html` — the entire application. `vault-apps-script.gs` — the Google Apps Script key vault (deployed separately; contains no secrets, which live in Script Properties).
+`index.html` — the entire application. `api-key-vault.gs` — the Google Apps Script key vault (deployed separately; contains no secrets, which live in Script Properties).
+
+**Deploying vault changes:** editing and saving the Apps Script does *not* update the live web app. You must go to Deploy → Manage deployments → edit the existing deployment (pencil icon) → Version: **New version** → Deploy. Editing the existing deployment keeps the same URL, so `VAULT_URL` in `index.html` stays valid; "New deployment" would create a different URL and break the link. Note also that the vault project may live under a different Google account than your default — check which account you're signed in as if changes appear to have no effect.
 
 ---
 
