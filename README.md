@@ -1,222 +1,51 @@
-CSV → text2qti Converter (Canvas) — README
-What this is
+# Batch Genie — AI Quiz Extractor for Canvas (v7.1)
 
-A single-file website (canvas-csv-to-text2qti.html) that converts a CSV of quiz items into the plain-text format accepted by text2qti, so you can generate a QTI .zip and import into Canvas. Works offline in any modern browser. No Python required.
-What you need
+Batch Genie turns any quiz document into a Canvas-ready QTI zip in minutes. Upload a PDF, Word doc, or text file; the AI extracts every question, suggests correct answers, and formats chemistry notation properly (H₂O, 6.02 × 10²³, SO₄²⁻). Review and edit in the browser, then export for Canvas or Blooket.
 
-    A modern browser (Chrome, Edge, Firefox, Safari)
+It is a single-file website — `index.html` — with no build step and no server beyond a small Google Apps Script key vault.
 
-    The HTML file: canvas-csv-to-text2qti.html
+## What it does
 
-    A CSV built from the template this site provides
+Upload a **PDF, .docx, .txt, or .md** file and Batch Genie will extract every question with AI, including embedded images from PDFs and Word docs. You review and edit everything in the browser: answers, points, images, feedback, and quiz settings. Then export:
 
-    Access to a text2qti converter (e.g., your URL: http://ec2-34-207-154-191.compute-1.amazonaws.com)
+- **QTI .zip for Canvas** — import via Course Settings → Import Course Content → QTI .zip file. The quiz title, description, shuffle/show-correct settings, access code, and due/availability dates are included via `assessment_meta.xml`, the Canvas-native settings file.
+- **Session .zip** — saves the full workbench (questions + images) so you can resume editing later, on any device.
+- **Blooket CSV** — every supported question converted to Blooket's multiple-choice format, with AI-generated distractors for numeric and short-answer questions. Images are not supported by Blooket CSV import; add those inside Blooket.
 
-    Your Canvas course to import the QTI .zip
+You can also **import a Canvas QTI export** back into the workbench for editing, and **merge multiple saved sessions** into one combined question bank.
 
-Quick start
+## Supported question types
 
-    Open canvas-csv-to-text2qti.html.
+MC (multiple choice), MR (multiple response), TF (true/false), NUM (numerical with sig-fig-aware bounds), SA (short answer), FIB (fill in multiple blanks), ESSAY, and FILE (file upload). Matching questions are not supported by this QTI profile.
 
-    Click Download Template CSV and open it in your spreadsheet tool.
+For FIB questions, type `[blank_id]` markers directly into the question text (e.g. `The pH is [ph_blank] and the pOH is [poh_blank]`) — the blank answer fields appear as soon as you click out of the text box.
 
-    Fill in rows (one item per row). Images are optional.
+## Setup
 
-    Save as CSV.
+1. Host `index.html` anywhere (GitHub Pages works) or open it locally in a modern browser.
+2. Create the key vault: new Google Apps Script project → paste in `vault-apps-script.gs` → set the two Script Properties (`ANTHROPIC_API_KEY`, `SETTINGS_PASSWORD`) → deploy as a web app ("Execute as: Me", "Who has access: Anyone") → put the deployment URL in the `VAULT_URL` constant in `index.html`.
+3. Open the site, click the ⚙ gear, and enter your settings password once. The AI unlocks and stays unlocked on that device.
 
-    Back on the website, upload your CSV and click Convert.
+The vault never reveals the API key without the password, and the password is only ever sent in POST bodies. The AI model (Claude Sonnet 5 by default; Opus 5 and Haiku 4.5 available) is selected in the same settings modal.
 
-    Click Download .txt.
+## Workflow
 
-    Click Continue to Converter, upload the .txt, generate the QTI .zip.
+1. **Upload** a document, set extraction preferences, and click Extract.
+2. **Review** every question — the AI flags its suggested answer, but you are responsible for verifying correctness before export.
+3. **Configure** quiz settings: title, description, points, access code, availability/due dates, shuffle, one-at-a-time.
+4. **Export** — Download QTI for Canvas, Save Session to resume later, or Export Blooket CSV.
+5. **Import into Canvas**: Course Settings → Import Course Content → QTI .zip file. After import, open the quiz in Canvas to confirm settings and set anything QTI can't carry (time limits, multiple attempts).
 
-    In Canvas: Settings → Import Course Content → QTI .zip.
+Before every export, Batch Genie validates the quiz and blocks the download if any question has no correct answer selected, empty answer choices, an invalid numerical rule, or FIB blanks without answers — so a half-finished question can't silently become a mis-keyed quiz.
 
-CSV column schema
-Column(s)	Purpose
-Type	MC, MR, TF, NUM, SA, ESSAY, FILE, TEXT, QUIZ_META
-Title	Question title (optional)
-Points	Point value (ignored for TEXT, QUIZ_META)
-Body	Question prompt or TEXT content
-Answer1..Answer5	Choices (MC/MR/TF), acceptable answers (SA), rule (NUM in Answer1)
-Correct	MC/TF: one index 1–5; MR: comma list (e.g., 1,3)
-GeneralFeedback	General feedback
-CorrectFeedback	Feedback on correct
-IncorrectFeedback	Feedback on incorrect
-Choice1Feedback..Choice5Feedback	Per-choice feedback F..J (optional)
-TextTitle, TextContent	Only for Type=TEXT
-QuizTitle, QuizDescription	Only for Type=QUIZ_META
-BodyImageURL, BodyImageAlt	Prompt image URL and alt (optional)
-BodyImageWidth, BodyImageHeight	Prompt image size: px or % (e.g., 300, 60%)
-Answer1ImageURL..Answer5ImageURL	Choice image URL(s) (optional)
-Answer1ImageAlt..Answer5ImageAlt	Choice image alt text (optional)
-Answer1ImageWidth..Answer5ImageWidth	Choice image width (optional)
-Answer1ImageHeight..Answer5ImageHeight	Choice image height (optional)
+## Notes and limitations
 
-Notes:
+Point values: if the source document states point values, the AI uses them; otherwise every question gets an automatic share of 100 points, which you can change globally with Update Point Values. Numerical answers accept `[min, max]` ranges, `value +- margin` (absolute or `%`), or exact values; the Exact Answer Updater computes sig-fig-appropriate bounds for you and understands `6.022e23`, `6.022 × 10²³`, and plain decimals. The chemistry sanitizer converts common plain-text notation to proper Unicode, but deliberately leaves letter-digit pairs at word ends alone (so electron configs like `1s2` in source text aren't wrongly subscripted) — the AI handles those during extraction. Large image sets may exceed browser storage for the auto-saved session; use Save Session (.zip) to preserve images reliably.
 
-    The header row is never included in the generated TXT.
+## Files
 
-    Width/Height can be left blank; you may supply only width.
+`index.html` — the entire application. `vault-apps-script.gs` — the Google Apps Script key vault (deployed separately; contains no secrets, which live in Script Properties).
 
-Question types (minimal examples)
-Multiple Choice (MC)
+---
 
-    CSV: Type=MC, choices in Answer1..Answer5, correct index in Correct.
-
-    TXT generated (shape):
-
-Title: Optional
-Points: 2
-1.  What is 2 + 3?
-a)  6
-b)  1
-*c)  5
-d)  10
-
-Multiple Response (MR)
-
-    CSV: Type=MR, correct like 1,3.
-
-    TXT generated (shape):
-
-Title: Optional
-Points: 3
-1.  Select all dinosaurs.
-[*] Tyrannosaurus rex
-[*] Triceratops
-[ ] Smilodon
-
-True/False (TF)
-
-    CSV: labels in Answer1 and Answer2 (or leave default True/False); Correct=1 or 2.
-
-Numerical (NUM)
-
-    CSV: put the rule in Answer1.
-
-        Exact: 5
-
-        Range: [1.2598, 1.2600]
-
-        Margin: 1.4142 +- 0.0001 or 100 +- 5%
-
-Short Answer (SA)
-
-    CSV: acceptable answers in Answer1..Answer5.
-
-Essay (ESSAY)
-
-    CSV: Type=ESSAY. No answers; optional prompt and prompt image.
-
-File Upload (FILE)
-
-    CSV: Type=FILE. No answers; optional prompt and prompt image.
-
-Text Block (TEXT)
-
-    CSV: Type=TEXT, use TextTitle and TextContent. No points.
-
-Quiz metadata (QUIZ_META)
-
-    CSV: Type=QUIZ_META, use QuizTitle and QuizDescription. Put this as the first data row.
-
-Images (prompt and choices)
-
-    Supported anywhere you provide:
-
-        BodyImageURL, BodyImageAlt, BodyImageWidth, BodyImageHeight
-
-        AnswerXImageURL, AnswerXImageAlt, AnswerXImageWidth, AnswerXImageHeight
-
-    Width/Height examples:
-
-        Pixels: 320
-
-        Percent: 60%
-
-    Tips:
-
-        Upload images to Canvas → Files, copy the image URL, and paste it into the CSV.
-
-        You can also use any publicly reachable https:// image URL.
-
-        Alt text is recommended for accessibility.
-
-On-page Image Size Helper
-
-    In Image size helper, upload a local image to see natural dimensions.
-
-    Set Width and Height values (px or %).
-
-    Copy the Markdown line preview to guide values for your CSV fields.
-
-    Replace URL with your Canvas Files URL (or public URL) in the CSV.
-
-Workflow details
-
-    Create CSV
-
-        Use the template to ensure all columns are present.
-
-        One item per row.
-
-    Generate TXT
-
-        Upload CSV → Convert → Download .txt.
-
-        The header row is excluded automatically.
-
-    Create QTI
-
-        Click Continue to Converter, upload the .txt, export QTI .zip.
-
-    Import to Canvas
-
-        Canvas → Settings → Import Course Content → QTI .zip.
-
-Validation checklist
-
-    Types are valid: MC, MR, TF, NUM, SA, ESSAY, FILE, TEXT, QUIZ_META
-
-    MC/TF: Correct has exactly one index 1–5
-
-    MR: Correct uses comma-separated indices
-
-    NUM: rule lives in Answer1
-
-    SA: list acceptable answers in Answer1..Answer5
-
-    TEXT: use TextTitle, TextContent
-
-    QUIZ_META: use QuizTitle, QuizDescription (first data row)
-
-    Image URLs load in a browser
-
-    Points are numbers (optional for TEXT/QUIZ_META)
-
-Troubleshooting
-
-    No output produced
-    Check that the header names match the template exactly and that at least one data row has a valid Type.
-
-    Choices missing
-    Ensure Answer1..Answer5 cells have values or leave them blank only if using images. If a choice has only an image, leave the text empty and set the corresponding AnswerXImageURL.
-
-    Image size looks off in Canvas
-    Try using only width (leave height blank) or switch from px to % (or vice versa). Large images may be styled by Canvas; test a few sizes.
-
-    Import fails in Canvas
-    Re-generate TXT, re-convert to QTI, and retry the import. Validate that your converter accepted the TXT without errors.
-
-Known limitations
-
-    Matching questions are not supported by this TXT format.
-
-    Up to 5 choices per item are provided in the template.
-
-Versioning
-
-    HTML generator: current revision with vertical Image Size Helper and single bottom “Continue to Converter” button.
-
-    Template CSV: canvas_csv_template_all_types_with_images.csv generated by the page.
+Created by Chris Leatherwood — Tyler, TX · v7.1 · © 2025–2026
