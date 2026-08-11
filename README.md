@@ -1,4 +1,36 @@
-# Batch Genie — AI Quiz Extractor for Canvas (v7.1)
+# Batch Genie — Quiz Tools for Canvas (v7.2)
+
+Two tools on one page, switched with the tabs at the top:
+
+- **AI Quiz Extractor** — turn a document into a Canvas-ready QTI quiz.
+- **Paper Test Builder** — pull from your Canvas question banks to generate scrambled paper test versions with answer keys.
+
+---
+
+## Paper Test Builder
+
+Built for the ExamView workflow: load banks → pick questions → split the test into sections → generate versions.
+
+**1. Question Banks.** Load one or many .zip files at once — Canvas question-bank exports or saved Batch Genie sessions. Each XML file inside a Canvas export becomes its own bank (Canvas puts each bank in a separate file), so a single zip can give you several banks to pull from. Check the banks you want active.
+
+**2. Select Questions.** Browse everything in the active banks, filtered by type or a text search. Click **View** on any question to see it with its correct answer marked. Check the ones you want, or use **Select All Shown** or **🎲 Pick Random…** to grab N at random. A running counter shows how many are selected.
+
+**3. Test Sections.** Each section holds a block of question numbers (shown as Q1–20, Q21–35, and so on) and draws that many questions at random from your selected pool. Narrow a section to certain question types or certain banks. Mark any question **Required** and it appears in that section on every version — useful for the questions everyone must answer.
+
+**4. Versions & Scrambling.** Choose how many versions and name them whatever you like (A, B, C or Blue/Gold or 1st Period/3rd Period). Independently toggle: scramble question order within sections, scramble answer choices within each question, or scramble all questions across the whole test. Then decide whether every version uses the same questions in a different order, or draws a different random set each time.
+
+**5. Generate.** Preview each version's answer key inline, print any version, or download the whole package as a zip:
+
+- `*.docx` — a real Word file per version, editable before printing. Images and chemistry Unicode carry over.
+- `*_print.html` — open and press Cmd+P to print or save as PDF.
+- `*_answer_keys.csv` — every version, one row per question, with section, type, points, and source bank.
+- `*_zipgrade_key.csv` — all versions in one file, ready to import into ZipGrade for bubble-sheet scanning.
+
+True/False choices are never scrambled (a reversed "False / True" reads as a mistake). Written-response questions get blank answer lines sized to the type and are left off the ZipGrade key, since a scanner can't grade them — the plain CSV still lists their answers for hand grading.
+
+---
+
+# AI Quiz Extractor
 
 Batch Genie turns any quiz document into a Canvas-ready QTI zip in minutes. Upload a PDF, Word doc, or text file; the AI extracts every question, suggests correct answers, and formats chemistry notation properly (H₂O, 6.02 × 10²³, SO₄²⁻). Review and edit in the browser, then export for Canvas or Blooket.
 
@@ -44,10 +76,10 @@ Point values: if the source document states point values, the AI uses them; othe
 
 ## Files
 
-`index.html` — the entire application. `api-key-vault.gs` — the Google Apps Script key vault (deployed separately; contains no secrets, which live in Script Properties).
+`index.html` — page shell, tabs, and the AI extractor. `test-banks.js` — question-bank loading. `test-compose.js` — version building and scrambling. `test-export.js` — Word/print/CSV output. `test-builder.js` — the Paper Test Builder interface. `api-key-vault.gs` — the Google Apps Script key vault (deployed separately; contains no secrets, which live in Script Properties).
 
 **Deploying vault changes:** editing and saving the Apps Script does *not* update the live web app. You must go to Deploy → Manage deployments → edit the existing deployment (pencil icon) → Version: **New version** → Deploy. Editing the existing deployment keeps the same URL, so `VAULT_URL` in `index.html` stays valid; "New deployment" would create a different URL and break the link. Note also that the vault project may live under a different Google account than your default — check which account you're signed in as if changes appear to have no effect.
 
 ---
 
-Created by Chris Leatherwood — Tyler, TX · v7.1 · © 2025–2026
+Created by Chris Leatherwood — Tyler, TX · v7.2 · © 2025–2026

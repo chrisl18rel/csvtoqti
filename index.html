@@ -71,6 +71,12 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
 @keyframes spin{to{transform:rotate(360deg)}}
 .questions-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center}
 .q-count-badge{background:#eef2ff;color:#3730a3;border-radius:8px;padding:5px 12px;font-size:13px;font-weight:600;margin-left:auto}
+.tabbar{display:flex;gap:6px;max-width:980px;margin:18px auto -8px;padding:0 18px}
+.tabbtn{appearance:none;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:700;padding:11px 22px;border-radius:12px 12px 0 0;background:rgba(255,255,255,.55);color:#5b5b7a;transition:background .15s,color .15s}
+.tabbtn:hover{background:rgba(255,255,255,.8)}
+.tabbtn.active{background:#fff;color:#201D52;box-shadow:0 -2px 12px rgba(32,29,82,.07)}
+.tabpane{display:none}
+.tabpane.active{display:block}
 </style>
 </head>
 <body>
@@ -82,10 +88,17 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
       style="background:rgba(255,255,255,0.15);border:none;cursor:pointer;border-radius:10px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;font-size:22px;transition:background .15s;position:relative;z-index:10"
       onmouseover="this.style.background='rgba(255,255,255,0.28)'"
       onmouseout="this.style.background='rgba(255,255,255,0.15)'">⚙</button>
-    <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);letter-spacing:.5px">v7.1</span>
+    <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);letter-spacing:.5px">v7.2</span>
   </div>
 </div>
 
+<!-- Tab bar -->
+<div class="tabbar">
+  <button class="tabbtn active" id="tabBtnExtractor" onclick="showTab('extractor')">🤖 AI Quiz Extractor</button>
+  <button class="tabbtn" id="tabBtnPaper" onclick="showTab('paper')">📄 Paper Test Builder</button>
+</div>
+
+<div class="tabpane active" id="pane-extractor">
 <div class="container">
 
   <!-- INSTRUCTIONS CARD -->
@@ -311,6 +324,21 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
   </div>
 
 </div>
+</div><!-- /pane-extractor -->
+
+<!-- PAPER TEST BUILDER TAB -->
+<div class="tabpane" id="pane-paper">
+  <div class="container">
+    <div class="card" style="background:linear-gradient(135deg,#201D52 0%,#3a2875 100%);border:none;color:#fff">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <h2 style="margin:0;font-size:18px;font-weight:700;color:#fff">Paper Test Builder</h2>
+        <span style="background:rgba(255,255,255,0.15);color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.5px">FROM YOUR CANVAS BANKS</span>
+      </div>
+      <p style="font-size:13px;opacity:.8;margin:0">Load your question banks, pick the questions you want, split the test into sections, and generate as many scrambled versions as you need — with answer keys for each.</p>
+    </div>
+    <div id="tbRoot"></div>
+  </div>
+</div>
 
 <!-- Image picker slide-in panel -->
 <div id="imgPickerOverlay" style="display:none;position:fixed;inset:0;background:rgba(32,29,82,.45);z-index:1000;backdrop-filter:blur(2px)" onclick="closeImgPicker()"></div>
@@ -343,6 +371,23 @@ let questions = [];
 let nextId = 1;
 const TYPES = ['MC','MR','TF','NUM','SA','FIB','ESSAY','FILE'];
 let extractedImages = {}; // { key: { data: 'base64', mime: 'image/png', page?: N } }
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+let paperTabReady = false;
+function showTab(which) {
+  const isPaper = which === 'paper';
+  document.getElementById('pane-extractor').classList.toggle('active', !isPaper);
+  document.getElementById('pane-paper').classList.toggle('active', isPaper);
+  document.getElementById('tabBtnExtractor').classList.toggle('active', !isPaper);
+  document.getElementById('tabBtnPaper').classList.toggle('active', isPaper);
+  // Build the paper-test UI the first time it's opened
+  if (isPaper && !paperTabReady && window.TestBuilder && window.TestBuilder.init) {
+    window.TestBuilder.init();
+    paperTabReady = true;
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.showTab = showTab;
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 const show = id => document.getElementById(id).classList.remove('hidden');
@@ -2080,11 +2125,14 @@ function parseQtiItem(ident, itemXml, imageMap) {
     const rXml    = respXml ? respXml[1] : '';
 
     if (type === 'MR') {
+      // Canvas/text2qti MR scoring lists the wrong choices inside <not> blocks.
+      // Strip those first, or every choice reads as correct.
+      const positiveXml = rXml.replace(/<not>[\s\S]*?<\/not>/g, '');
       const veRegex = /<varequal\s+respident="[^"]*">([^<]+)<\/varequal>/g;
       let vm;
-      while ((vm = veRegex.exec(rXml)) !== null) {
+      while ((vm = veRegex.exec(positiveXml)) !== null) {
         const lid = vm[1].trim();
-        if (labelMap[lid] !== undefined) correct.push(labelMap[lid]);
+        if (labelMap[lid] !== undefined && correct.indexOf(labelMap[lid]) === -1) correct.push(labelMap[lid]);
       }
     } else {
       // MC / TF — single correct answer (first varequal wins)
@@ -2603,7 +2651,7 @@ document.getElementById('blooketBtn').addEventListener('click', () => {
 
 </script>
 <footer style="text-align:center;padding:28px 16px;font-size:12px;color:#888;border-top:1px solid #e0e0f0;margin-top:12px">
-  Created by <strong style="color:#201D52">Chris Leatherwood</strong> &mdash; Tyler, TX &nbsp;|&nbsp; &copy; 2025&ndash;2026 &nbsp;|&nbsp; v7.1
+  Created by <strong style="color:#201D52">Chris Leatherwood</strong> &mdash; Tyler, TX &nbsp;|&nbsp; &copy; 2025&ndash;2026 &nbsp;|&nbsp; v7.2
 </footer>
 <!-- Settings Modal -->
 <div id="settingsOverlay" style="display:none;position:fixed;inset:0;background:rgba(32,29,82,.55);z-index:2000;backdrop-filter:blur(3px)" onclick="handleSettingsOverlayClick(event)"></div>
@@ -2643,6 +2691,13 @@ document.getElementById('blooketBtn').addEventListener('click', () => {
 
   </div>
 </div>
+
+<!-- Paper Test Builder modules (loaded after index.html's own script so shared
+     helpers like esc() and parseQtiItem() already exist) -->
+<script src="test-banks.js"></script>
+<script src="test-compose.js"></script>
+<script src="test-export.js"></script>
+<script src="test-builder.js"></script>
 
 <!-- Styled in-app alert modal (replaces browser alert()) -->
 <div id="appAlertOverlay" style="display:none;position:fixed;inset:0;background:rgba(32,29,82,.55);z-index:3000;backdrop-filter:blur(3px)" onclick="closeAppAlert()"></div>
