@@ -120,7 +120,7 @@
       // 3 — SECTIONS
       '<div class="card">',
       '  <h2><span class="step-dot" style="background:#d97706">3</span>Test Sections</h2>',
-      '  <p style="font-size:13px;color:#555;margin:0 0 12px">Each section holds a block of question numbers and draws that many questions at random from the ones you selected. Mark any question <strong>Required</strong> to force it onto every version.</p>',
+      '  <p style="font-size:13px;color:#555;margin:0 0 12px">A section is one part of your test — for example <em>Part I, questions 1–20</em>. Say how many questions it holds, and they are drawn at random from the ones you selected in step 2. Most tests need just one or two sections.</p>',
       '  <div id="tbSectionList"></div>',
       '  <div class="btnrow" style="margin-top:10px">',
       '    <button class="btn btn-violet btn-sm" id="tbAddSection">+ Add Section</button>',
@@ -457,6 +457,8 @@
       name: 'Part ' + romanize(sections.length + 1),
       count: 10,
       pointsEach: '',
+      showAdvanced: false,
+      showRequired: false,
       types: [],
       bankIds: [],
       required: []
@@ -498,48 +500,50 @@
       running = end;
       var short = pool.length < sec.count;
 
-      var typeChips = ['MC','MR','TF','NUM','SA','FIB','ESSAY'].map(function (t) {
-        var on = sec.types.indexOf(t) !== -1;
-        return '<label style="font-weight:400;font-size:12px;display:inline-flex;align-items:center;gap:5px;margin:0 10px 4px 0;cursor:pointer">' +
-          '<input type="checkbox" class="tbSecType" data-sec="' + sec.id + '" data-type="' + t + '" ' + (on ? 'checked' : '') + ' style="width:15px;height:15px;accent-color:#6465F1;margin:0">' + t + '</label>';
-      }).join('');
-
-      var bankChips = TB.banks.map(function (b) {
-        var on = sec.bankIds.indexOf(b.id) !== -1;
-        return '<label style="font-weight:400;font-size:12px;display:inline-flex;align-items:center;gap:5px;margin:0 10px 4px 0;cursor:pointer">' +
-          '<input type="checkbox" class="tbSecBank" data-sec="' + sec.id + '" data-bank="' + b.id + '" ' + (on ? 'checked' : '') + ' style="width:15px;height:15px;accent-color:#6465F1;margin:0">' + esc(b.name) + '</label>';
-      }).join('') || '<span style="font-size:12px;color:#888">no banks loaded</span>';
-
-      var reqList = sec.required.map(function (uid) {
-        var q = TB.findQuestion(uid);
-        var label = q ? TB.plain(q).substring(0, 60) : '(missing question)';
-        return '<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e0e0f0;border-radius:6px;padding:5px 9px;margin-bottom:4px;font-size:12px">' +
-          '<span class="type-pill tp-' + (q ? q.type : 'MC') + '" style="font-size:10px;padding:2px 6px">' + (q ? q.type : '?') + '</span>' +
-          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(label) + '</span>' +
-          '<button class="btn btn-red btn-sm" data-unreq="' + sec.id + '|' + uid + '" style="padding:3px 8px;font-size:11px">✕</button></div>';
-      }).join('');
+      // One-line summary of any narrowing that's active
+      var bits = [];
+      if (sec.types.length) bits.push(sec.types.join(', '));
+      if (sec.bankIds.length) bits.push(sec.bankIds.length + ' bank' + (sec.bankIds.length !== 1 ? 's' : ''));
+      var narrowLabel = bits.length ? bits.join(' · ') : 'any type, any bank';
 
       return '<div style="background:#fafafe;border:1.5px solid #e8e8f5;border-radius:12px;padding:14px;margin-bottom:10px">' +
+
+        // Header: range + name + delete
         '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
-        '<span class="q-num" style="background:#d97706">Q' + start + '–' + end + '</span>' +
+        '<span class="q-num" style="background:#d97706;white-space:nowrap">Q' + start + '–' + end + '</span>' +
         '<input type="text" class="tbSecName" data-sec="' + sec.id + '" value="' + esc(sec.name) + '" placeholder="Section name" style="flex:1;margin-bottom:0;font-weight:700">' +
-        '<button class="btn btn-red btn-sm" data-rmsec="' + sec.id + '">✕</button>' +
+        '<button class="btn btn-red btn-sm" data-rmsec="' + sec.id + '" title="Delete section">✕</button>' +
         '</div>' +
-        '<div class="row2" style="margin-bottom:8px">' +
-        '<div><label style="font-size:12px">How many questions in this section</label>' +
+
+        // The two numbers that matter
+        '<div class="row2" style="margin-bottom:10px">' +
+        '<div><label style="font-size:12px">How many questions</label>' +
         '<input type="number" class="tbSecCount" data-sec="' + sec.id + '" value="' + sec.count + '" min="1" max="200" style="margin-bottom:0"></div>' +
-        '<div><label style="font-size:12px">Points each <span style="font-weight:400;color:#888">(blank = use the bank\'s value)</span></label>' +
-        '<input type="number" class="tbSecPts" data-sec="' + sec.id + '" value="' + (sec.pointsEach || '') + '" min="0" step="0.5" placeholder="e.g. 2" style="margin-bottom:0"></div>' +
+        '<div><label style="font-size:12px">Points each <span style="font-weight:400;color:#888">(optional)</span></label>' +
+        '<input type="number" class="tbSecPts" data-sec="' + sec.id + '" value="' + (sec.pointsEach || '') + '" min="0" step="0.5" placeholder="from bank" style="margin-bottom:0"></div>' +
         '</div>' +
-        '<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:' + (short ? '#dc3545' : '#059669') + '">' +
-        pool.length + ' question' + (pool.length !== 1 ? 's' : '') + ' available to draw from' + (short ? ' — not enough for ' + sec.count + '!' : '') + '</div>' +
-        '<label style="font-size:12px;margin-bottom:4px">Limit to question types <span style="font-weight:400;color:#888">(none checked = any type)</span></label>' +
-        '<div style="margin-bottom:8px">' + typeChips + '</div>' +
-        '<label style="font-size:12px;margin-bottom:4px">Limit to banks <span style="font-weight:400;color:#888">(none checked = any bank)</span></label>' +
-        '<div style="margin-bottom:10px">' + bankChips + '</div>' +
-        '<label style="font-size:12px;margin-bottom:4px">Required questions <span style="font-weight:400;color:#888">(always appear in this section, on every version)</span></label>' +
-        (reqList || '<div style="font-size:12px;color:#888;margin-bottom:6px">None — the whole section is drawn at random.</div>') +
-        '<button class="btn btn-navy btn-sm" data-addreq="' + sec.id + '">+ Add Required Question</button>' +
+
+        // Availability, stated plainly
+        '<div style="font-size:13px;font-weight:700;margin-bottom:10px;color:' + (short ? '#dc3545' : '#059669') + '">' +
+        (short
+          ? '⚠ Only ' + pool.length + ' question' + (pool.length !== 1 ? 's' : '') + ' available — select more in step 2, or lower the count.'
+          : '✓ Drawing ' + sec.count + ' from ' + pool.length + ' selected question' + (pool.length !== 1 ? 's' : '')) +
+        '</div>' +
+
+        // Collapsed: narrowing
+        '<div style="border-top:1px solid #e8e8f5;padding-top:8px">' +
+        '<button class="tbDisc" data-adv="' + sec.id + '" style="background:none;border:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;color:#6465F1">' +
+        (sec.showAdvanced ? '▾' : '▸') + ' Narrow what this section pulls from <span style="font-weight:400;color:#888">(' + esc(narrowLabel) + ')</span></button>' +
+        (sec.showAdvanced ? renderNarrow(sec) : '') +
+        '</div>' +
+
+        // Collapsed: required questions
+        '<div style="border-top:1px solid #e8e8f5;padding-top:8px;margin-top:8px">' +
+        '<button class="tbDisc" data-req="' + sec.id + '" style="background:none;border:none;padding:0;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;color:#6465F1">' +
+        (sec.showRequired ? '▾' : '▸') + ' Questions that must appear <span style="font-weight:400;color:#888">(' + sec.required.length + ')</span></button>' +
+        (sec.showRequired ? renderRequired(sec) : '') +
+        '</div>' +
+
         '</div>';
     }).join('');
 
@@ -547,6 +551,46 @@
     el('tbSectionSummary').textContent = sections.length + ' section' + (sections.length !== 1 ? 's' : '') + ' — ' + totalQ + ' questions per version';
 
     wireSectionEvents();
+  }
+
+  // Type chips plus a bank picker button — no more wall of checkboxes
+  function renderNarrow(sec) {
+    var typeChips = ['MC','MR','TF','NUM','SA','FIB','MATCH','ESSAY'].map(function (t) {
+      var on = sec.types.indexOf(t) !== -1;
+      return '<label style="font-weight:400;font-size:12px;display:inline-flex;align-items:center;gap:5px;margin:0 10px 4px 0;cursor:pointer">' +
+        '<input type="checkbox" class="tbSecType" data-sec="' + sec.id + '" data-type="' + t + '" ' + (on ? 'checked' : '') +
+        ' style="width:15px;height:15px;accent-color:#6465F1;margin:0">' + t + '</label>';
+    }).join('');
+
+    var bankLabel = sec.bankIds.length
+      ? sec.bankIds.length + ' bank' + (sec.bankIds.length !== 1 ? 's' : '') + ' chosen'
+      : 'All banks';
+
+    return '<div style="margin-top:8px">' +
+      '<div style="font-size:12px;color:#666;margin-bottom:6px">Leave these alone to pull from everything you selected.</div>' +
+      '<label style="font-size:12px;margin-bottom:4px">Question types</label>' +
+      '<div style="margin-bottom:10px">' + typeChips + '</div>' +
+      '<label style="font-size:12px;margin-bottom:4px">Banks</label>' +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+      '<span style="font-size:13px;font-weight:600;color:#201D52">' + bankLabel + '</span>' +
+      '<button class="btn btn-navy btn-sm" data-pickbanks="' + sec.id + '">Choose banks…</button>' +
+      (sec.bankIds.length ? '<button class="btn btn-gray btn-sm" data-allbanks="' + sec.id + '">Use all banks</button>' : '') +
+      '</div></div>';
+  }
+
+  function renderRequired(sec) {
+    var list = sec.required.map(function (uid) {
+      var q = TB.findQuestion(uid);
+      var label = q ? TB.plain(q).substring(0, 60) : '(missing question)';
+      return '<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e0e0f0;border-radius:6px;padding:5px 9px;margin-bottom:4px;font-size:12px">' +
+        '<span class="type-pill tp-' + (q ? q.type : 'MC') + '" style="font-size:10px;padding:2px 6px">' + (q ? q.type : '?') + '</span>' +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(label) + '</span>' +
+        '<button class="btn btn-red btn-sm" data-unreq="' + sec.id + '|' + uid + '" style="padding:3px 8px;font-size:11px">✕</button></div>';
+    }).join('');
+    return '<div style="margin-top:8px">' +
+      '<div style="font-size:12px;color:#666;margin-bottom:6px">Pin a question here and it lands in this section on every version. Everything else is random.</div>' +
+      list +
+      '<button class="btn btn-navy btn-sm" data-addreq="' + sec.id + '">+ Add Required Question</button></div>';
   }
 
   function findSec(id) { return sections.find(function (s) { return s.id === id; }); }
@@ -576,17 +620,33 @@
         renderSections();
       });
     });
-    wrap.querySelectorAll('.tbSecBank').forEach(function (c) {
-      c.addEventListener('change', function () {
-        var sec = findSec(this.dataset.sec), b = this.dataset.bank;
-        if (this.checked) { if (sec.bankIds.indexOf(b) === -1) sec.bankIds.push(b); }
-        else sec.bankIds = sec.bankIds.filter(function (x) { return x !== b; });
+    wrap.querySelectorAll('[data-adv]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var sec = findSec(this.dataset.adv);
+        sec.showAdvanced = !sec.showAdvanced;
+        renderSections();
+      });
+    });
+    wrap.querySelectorAll('[data-req]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var sec = findSec(this.dataset.req);
+        sec.showRequired = !sec.showRequired;
+        renderSections();
+      });
+    });
+    wrap.querySelectorAll('[data-pickbanks]').forEach(function (b) {
+      b.addEventListener('click', function () { openBankPicker(this.dataset.pickbanks); });
+    });
+    wrap.querySelectorAll('[data-allbanks]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        findSec(this.dataset.allbanks).bankIds = [];
         renderSections();
       });
     });
     wrap.querySelectorAll('[data-rmsec]').forEach(function (b) {
       b.addEventListener('click', function () {
-        sections = sections.filter(function (s) { return s.id !== this.dataset.rmsec; }.bind(this));
+        var id = this.dataset.rmsec;
+        sections = sections.filter(function (s) { return s.id !== id; });
         renderSections();
       });
     });
@@ -601,6 +661,74 @@
     wrap.querySelectorAll('[data-addreq]').forEach(function (b) {
       b.addEventListener('click', function () { openRequiredPicker(this.dataset.addreq); });
     });
+  }
+
+  // ── Bank picker ─────────────────────────────────────────────────────────────
+  // A course export can hold hundreds of banks, so they live behind a searchable
+  // dialog rather than as inline checkboxes.
+  function openBankPicker(secId) {
+    var sec = findSec(secId);
+    var chosen = {};
+    sec.bankIds.forEach(function (id) { chosen[id] = true; });
+    var search = '';
+
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(32,29,82,.55);z-index:3000;backdrop-filter:blur(3px)';
+    var box = document.createElement('div');
+    box.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:640px;max-width:94vw;max-height:80vh;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(32,29,82,.25);z-index:3001;display:flex;flex-direction:column;overflow:hidden';
+    document.body.appendChild(ov); document.body.appendChild(box);
+
+    function draw() {
+      var shown = TB.banks.filter(function (b) {
+        return !search || b.name.toLowerCase().indexOf(search) !== -1;
+      });
+      var n = Object.keys(chosen).length;
+      box.innerHTML =
+        '<div style="background:linear-gradient(135deg,#201D52,#3a2875);padding:16px 20px;color:#fff;font-weight:700;font-size:15px">Which banks should “' + esc(sec.name) + '” pull from?</div>' +
+        '<div style="padding:12px 20px;border-bottom:1px solid #e8e8f5;display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+        '<input type="text" id="tbBpSearch" placeholder="Search bank names…" value="' + esc(search) + '" style="flex:1;min-width:180px;margin-bottom:0;padding:8px 12px;font-size:13px">' +
+        '<span style="font-size:12px;color:#666">' + (n ? n + ' chosen' : 'none chosen = all banks') + '</span>' +
+        '</div>' +
+        '<div id="tbBpList" style="padding:10px 20px;overflow-y:auto;flex:1">' +
+        (shown.length
+          ? shown.slice(0, 300).map(function (b) {
+              return '<label style="display:flex;align-items:center;gap:9px;padding:6px 8px;border:1px solid #e8e8f5;border-radius:8px;margin-bottom:4px;font-size:13px;font-weight:400;cursor:pointer">' +
+                '<input type="checkbox" data-bp="' + b.id + '" ' + (chosen[b.id] ? 'checked' : '') + ' style="width:16px;height:16px;accent-color:#6465F1;margin:0">' +
+                '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(b.name) + '</span>' +
+                '<span style="color:#6465F1;font-weight:700">' + b.questions.length + '</span></label>';
+            }).join('') + (shown.length > 300 ? '<div style="padding:8px;text-align:center;font-size:12px;color:#888">Showing 300 of ' + shown.length + ' — search to narrow.</div>' : '')
+          : '<p style="font-size:13px;color:#888;text-align:center;padding:20px">No bank names match that search.</p>') +
+        '</div>' +
+        '<div style="padding:12px 20px;border-top:1px solid #e8e8f5;display:flex;gap:10px;justify-content:flex-end">' +
+        '<button class="btn btn-gray btn-sm" id="tbBpClear">Use all banks</button>' +
+        '<button class="btn btn-indigo btn-sm" id="tbBpDone">Done</button></div>';
+
+      box.querySelector('#tbBpSearch').addEventListener('input', function () {
+        search = this.value.trim().toLowerCase();
+        var pos = this.selectionStart;
+        draw();
+        var f = box.querySelector('#tbBpSearch');
+        f.focus(); try { f.setSelectionRange(pos, pos); } catch (e) {}
+      });
+      box.querySelectorAll('[data-bp]').forEach(function (c) {
+        c.addEventListener('change', function () {
+          if (this.checked) chosen[this.dataset.bp] = true; else delete chosen[this.dataset.bp];
+          var lbl = box.querySelector('#tbBpSearch').parentNode.querySelector('span');
+          var n2 = Object.keys(chosen).length;
+          if (lbl) lbl.textContent = n2 ? n2 + ' chosen' : 'none chosen = all banks';
+        });
+      });
+      box.querySelector('#tbBpClear').addEventListener('click', function () { chosen = {}; close(true); });
+      box.querySelector('#tbBpDone').addEventListener('click', function () { close(true); });
+    }
+
+    function close(save) {
+      if (save) sec.bankIds = Object.keys(chosen);
+      ov.remove(); box.remove();
+      renderSections();
+    }
+    ov.onclick = function () { close(true); };
+    draw();
   }
 
   // Picker listing the selected questions eligible for this section
