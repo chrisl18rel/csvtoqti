@@ -41,6 +41,9 @@
 
   TB.TYPE_MAP = TYPE_MAP;
 
+  TB.nextUid    = function () { return 'q' + (qSeq++); };
+  TB.nextBankId = function () { return 'bank_' + (bankSeq++); };
+
   function decodeEntities(s) { return H.decode(s); }
 
   function firstMatch(str, re) { var m = str.match(re); return m ? m[1] : ''; }
@@ -289,8 +292,14 @@
 
         var banks = [];
 
+        // A bank saved from this app's own library?
+        if (zip.file('_bank.json') && TB.parseSavedBank) {
+          var savedBank = await TB.parseSavedBank(zip, file.name, TB.nextBankId());
+          if (savedBank && savedBank.questions.length) banks.push(savedBank);
+        }
+
         // Batch Genie session?
-        var wbFile = zip.file('_workbench.json');
+        var wbFile = banks.length ? null : zip.file('_workbench.json');
         if (wbFile) {
           var wb = JSON.parse(await wbFile.async('string'));
           var b = { id: 'bank_' + (bankSeq++), name: (wb.meta && wb.meta.title) || file.name.replace(/\.[^.]+$/, ''), kind: 'session', questions: [], skipped: {} };
@@ -306,7 +315,7 @@
           if (b.questions.length) banks.push(b);
           // session images are already base64 in the json
           b.inlineImages = wb.extractedImages || {};
-        } else {
+        } else if (!banks.length) {
           var qtiPaths = Object.keys(zip.files).filter(function (p) {
             return !zip.files[p].dir && /\.(qti|xml)$/i.test(p) &&
               !/imsmanifest\.xml$/i.test(p) && !/assessment_meta\.xml$/i.test(p) &&
@@ -375,6 +384,12 @@
   TB.loadImageRef = async function (q, ref) {
     var bank = bankOf(q);
     if (!bank) return '';
+
+    // Banks saved to your library travel with their own pictures
+    if (bank.savedImages) {
+      var sid = ref.kind === 'remote' ? ref.url : ref.path;
+      if (bank.savedImages[sid]) return bank.savedImages[sid];
+    }
 
     if (ref.kind === 'remote') {
       // Many question images point at absolute Canvas URLs that need a login,

@@ -94,8 +94,10 @@
       '      📂 Load Bank File(s)',
       '      <input type="file" id="tbBankInput" accept=".zip,.imscc" multiple style="display:none">',
       '    </label>',
+      '    <button class="btn btn-green" id="tbSaveLibrary">💾 Save Checked Banks to My Computer</button>',
       '    <button class="btn btn-gray btn-sm" id="tbClearBanks">Clear All Banks</button>',
       '  </div>',
+      '  <p style="font-size:12px;color:#666;margin:10px 0 0">Once you know which banks you use, save them as small .zip files in a <strong>Question Banks</strong> folder — then load just those next time instead of the whole course export.</p>',
       '  <div style="display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap">',
       '    <input type="text" id="tbBankSearch" placeholder="Filter banks by name…" style="flex:1;min-width:180px;margin-bottom:0;padding:7px 12px;font-size:13px">',
       '    <button class="btn btn-navy btn-sm" id="tbBanksAll">Check All Shown</button>',
@@ -126,6 +128,7 @@
       '    <button class="btn btn-navy btn-sm" id="tbSelectAll">Select All Shown</button>',
       '    <button class="btn btn-gray btn-sm" id="tbSelectNone">Clear Selection</button>',
       '    <button class="btn btn-violet btn-sm" id="tbSelectRandom">🎲 Pick Random…</button>',
+      '    <button class="btn btn-green btn-sm" id="tbNewQuestion">+ New Question</button>',
       '    <span class="q-count-badge" id="tbSelCount">0 selected</span>',
       '  </div>',
       '  <div id="tbQuestionList" style="max-height:520px;overflow-y:auto;border:1.5px solid #e8e8f5;border-radius:12px;padding:8px;background:#fafafe"></div>',
@@ -223,6 +226,15 @@
       selected = {}; renderQuestions(); renderSections();
     });
     el('tbSelectRandom').addEventListener('click', pickRandomPrompt);
+    el('tbSaveLibrary').addEventListener('click', onSaveLibrary);
+    el('tbNewQuestion').addEventListener('click', function () {
+      var target = TB.banks.filter(function (b) { return activeBanks[b.id]; })[0] || TB.banks[0];
+      if (!target) {
+        target = TB.createBank('My Questions');
+        activeBanks[target.id] = true;
+      }
+      TB.newQuestion(target.id, function () { renderBanks(); renderQuestions(); renderSections(); });
+    });
     el('tbAddSection').addEventListener('click', function () { addSection(); });
     el('tbGenerate').addEventListener('click', onGenerate);
     el('tbDownloadAll').addEventListener('click', onDownloadAll);
@@ -290,6 +302,44 @@
     renderBanks(); renderQuestions(); renderSections();
   }
 
+  async function onSaveLibrary() {
+    var chosen = TB.banks.filter(function (b) { return activeBanks[b.id]; });
+    if (!chosen.length) {
+      tbStatus('⚠ Check the banks you want to save first (step 1).', 'warn');
+      return;
+    }
+    var btn = el('tbSaveLibrary');
+    var statusEl = el('tbBankStatus');
+    function prog(msg) {
+      statusEl.className = 'status-msg show status-loading';
+      statusEl.innerHTML = '<span class="spinner"></span> ' + esc(msg);
+    }
+    btn.disabled = true;
+
+    try {
+      if (TB.canWriteFolders()) {
+        var res = await TB.saveBanksToFolder(chosen, prog);
+        statusEl.className = 'status-msg show status-done';
+        statusEl.innerHTML = '✅ Saved <strong>' + res.saved.length + '</strong> bank' +
+          (res.saved.length !== 1 ? 's' : '') + ' into <strong>' + esc(res.folder) + '</strong>.' +
+          (res.failed.length ? '<br><span style="color:#92400e">Could not save: ' +
+            res.failed.map(function (f) { return esc(f.name) + ' (' + esc(f.reason) + ')'; }).join('; ') + '</span>' : '');
+      } else {
+        var n = await TB.downloadBanksZip(chosen, prog);
+        statusEl.className = 'status-msg show status-done';
+        statusEl.innerHTML = '✅ Downloaded <strong>question-banks.zip</strong> with ' + n +
+          ' bank' + (n !== 1 ? 's' : '') + ' inside. Unzip it wherever you keep your banks.';
+      }
+      renderBanks();
+    } catch (err) {
+      statusEl.className = 'status-msg show ' + (/abort/i.test(err.name || '') ? 'status-done' : 'status-error');
+      statusEl.innerHTML = /abort/i.test(err.name || '')
+        ? 'Save cancelled.'
+        : '⚠ Could not save: ' + esc(err.message);
+    }
+    btn.disabled = false;
+  }
+
   function pickRandomPrompt() {
     var pool = visibleQuestions();
     if (!pool.length) { tbStatus('⚠ No questions are showing to pick from. Load a bank first.', 'warn'); return; }
@@ -349,12 +399,13 @@
 
     var slice = shown.slice(0, 400);
     wrap.innerHTML = slice.map(function (b) {
-      var badge = b.kind === 'bank' ? 'BANK' : (b.kind === 'quiz' ? 'QUIZ' : 'SESSION');
-      var color = b.kind === 'bank' ? '#0891b2' : (b.kind === 'quiz' ? '#8F37EB' : '#059669');
+      var badge = b.fromLibrary ? 'MY BANK' : (b.kind === 'bank' ? 'BANK' : (b.kind === 'quiz' ? 'QUIZ' : 'SESSION'));
+      var color = b.fromLibrary ? '#059669' : (b.kind === 'bank' ? '#0891b2' : (b.kind === 'quiz' ? '#8F37EB' : '#059669'));
       return '<div style="display:flex;align-items:center;gap:9px;background:#f4f4fc;border:1.5px solid #e0e0f0;border-radius:8px;padding:7px 11px;margin-bottom:5px;font-size:13px">' +
         '<input type="checkbox" data-bank="' + b.id + '" class="tbBankChk" ' + (activeBanks[b.id] ? 'checked' : '') + ' style="width:16px;height:16px;accent-color:#6465F1;margin:0;flex-shrink:0">' +
         '<span style="background:' + color + ';color:#fff;border-radius:5px;padding:2px 6px;font-size:10px;font-weight:700;flex-shrink:0">' + badge + '</span>' +
-        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>' + esc(b.name) + '</strong></span>' +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>' + esc(b.name) + '</strong>' +
+        (b.dirty ? ' <span style="background:#d97706;color:#fff;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">UNSAVED EDITS</span>' : '') + '</span>' +
         '<span style="color:#6465F1;font-weight:700;flex-shrink:0">' + b.questions.length + '</span>' +
         '<button class="btn btn-red btn-sm" data-rmbank="' + b.id + '" style="padding:3px 8px;font-size:11px;flex-shrink:0">✕</button>' +
         '</div>';
@@ -405,9 +456,11 @@
           '<div style="display:flex;align-items:center;gap:9px">' +
           '<input type="checkbox" class="tbQChk" data-uid="' + q.uid + '" ' + (selected[q.uid] ? 'checked' : '') + ' style="width:17px;height:17px;accent-color:#6465F1;margin:0;flex-shrink:0">' +
           '<span class="type-pill tp-' + q.type + '" style="flex-shrink:0">' + q.type + '</span>' +
+          (q.edited ? '<span style="background:#d97706;color:#fff;border-radius:5px;padding:2px 6px;font-size:10px;font-weight:700;flex-shrink:0">EDITED</span>' : '') +
           '<span style="flex:1;font-size:13px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(preview.substring(0, 110)) + (preview.length > 110 ? '…' : '') + '</span>' +
           '<span style="font-size:11px;color:#888;flex-shrink:0;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(q.bankName || '') + '</span>' +
           '<button class="btn btn-gray btn-sm" data-toggle="' + q.uid + '" style="flex-shrink:0">' + (isOpen ? 'Hide' : 'View') + '</button>' +
+          '<button class="btn btn-indigo btn-sm" data-edit="' + q.uid + '" style="flex-shrink:0">✏</button>' +
           '</div>' +
           (isOpen ? '<div id="qd-' + q.uid + '">' + renderQuestionDetail(q) + '</div>' : '') +
           '</div>';
@@ -418,6 +471,21 @@
         if (this.checked) selected[this.dataset.uid] = true; else delete selected[this.dataset.uid];
         el('tbSelCount').textContent = selectedUids().length + ' selected';
         renderSections();
+      });
+    });
+    list.querySelectorAll('[data-edit]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        var q = TB.findQuestion(this.dataset.edit);
+        await TB.ensureImages([q]);        // so the editor preview shows pictures
+        TB.openEditor(q.uid, function (mode, bank) {
+          if (mode !== 'overwrite') {
+            activeBanks[bank.id] = true;   // make the new copy visible right away
+          }
+          renderBanks(); renderQuestions(); renderSections();
+          tbStatus(mode === 'overwrite'
+            ? '✅ Question updated. Use <strong>Save Checked Banks</strong> in step 1 to keep the change on your computer.'
+            : '✅ Saved to <strong>' + esc(bank.name) + '</strong>. It is available to this test now.', 'success');
+        });
       });
     });
     list.querySelectorAll('[data-toggle]').forEach(function (b) {
@@ -900,6 +968,8 @@
     if (!TB.loadBankFiles) missing.push('test-banks.js');
     if (!TB.buildVersions) missing.push('test-compose.js');
     if (!TB.printHtml) missing.push('test-export.js');
+    if (!TB.buildBankZip) missing.push('test-library.js');
+    if (!TB.openEditor) missing.push('test-editor.js');
     if (!global.JSZip) missing.push('JSZip (CDN)');
     if (missing.length) {
       var root0 = el('tbRoot');
