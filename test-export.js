@@ -93,6 +93,8 @@
     return 0;
   }
 
+  var H = global.TBHtml;
+
   function headerLines(blueprint, version) {
     return {
       title: blueprint.title || 'Test',
@@ -122,11 +124,18 @@
       '.secHead{font-weight:700;font-size:12pt;margin:18px 0 10px;padding-top:6px;border-top:1px solid #999;page-break-after:avoid}' +
       '.q{margin:0 0 13px;page-break-inside:avoid}' +
       '.qtext{margin:0 0 4px}' +
-      '.qnum{font-weight:700;margin-right:6px}' +
+      '.qtext p{margin:0 0 4px}' +
+      '.qnum{font-weight:700;margin-right:6px;float:left}' +
+      '.qbody{overflow:hidden}' +
       '.choices{margin:2px 0 0 26px}' +
-      '.choice{margin:1px 0}' +
-      '.cl{font-weight:700;margin-right:6px}' +
-      '.qimg{display:block;max-width:75%;max-height:2.6in;margin:6px 0 6px 26px}' +
+      '.choice{margin:1px 0;display:flex;gap:6px;align-items:flex-start}' +
+      '.choice p{margin:0}' +
+      '.cl{font-weight:700;flex-shrink:0}' +
+      '.textblock{margin:10px 0 14px;padding:8px 12px;background:#f5f5f5;border-left:3px solid #666;page-break-inside:avoid}' +
+      '.textblock p{margin:0 0 5px}' +
+      'table.qtable{border-collapse:collapse;margin:6px 0;font-size:10.5pt}' +
+      'table.qtable td,table.qtable th{border:1px solid #666;padding:3px 7px;vertical-align:top}' +
+      'img{max-width:100%;max-height:2.4in}' +
       '.blank{border-bottom:1px solid #000;height:1.5em;margin:6px 26px 0 26px}' +
       '.foot{margin-top:24px;border-top:1px solid #999;padding-top:6px;font-size:9pt;text-align:center;color:#333}' +
       '@media print{.noprint{display:none}}' +
@@ -145,20 +154,27 @@
 
     if (h.instructions) out.push('<p class="tInstr">' + esc(h.instructions) + '</p>');
 
+    var resolve = TB.resolveImage;
+
     version.sections.forEach(function (sec) {
       if (sec.name) out.push('<p class="secHead">' + esc(sec.name) + '</p>');
       sec.items.forEach(function (item) {
         var q = item.q;
-        out.push('<div class="q"><p class="qtext"><span class="qnum">' + item.number + '.</span>' +
-          esc(q.body).replace(/\n/g, '<br>') + '</p>');
 
-        var im = TB.imageFor(q);
-        if (im) out.push('<img class="qimg" src="data:' + im.mime + ';base64,' + im.data + '">');
+        // Text blocks are instructions/passages — no number, no answer space
+        if (q.type === 'TEXT') {
+          out.push('<div class="textblock">' + H.sanitize(q.html, resolve) + '</div>');
+          return;
+        }
+
+        out.push('<div class="q"><div class="qtext"><span class="qnum">' + item.number + '.</span>' +
+          '<div class="qbody">' + H.sanitize(q.html, resolve) + '</div></div>');
 
         if (item.order && item.order.length && TB.CHOICE_TYPES.indexOf(q.type) !== -1) {
           out.push('<div class="choices">');
           item.order.forEach(function (ci, pos) {
-            out.push('<div class="choice"><span class="cl">' + TB.LETTERS[pos] + '.</span>' + esc(q.answers[ci]) + '</div>');
+            out.push('<div class="choice"><span class="cl">' + TB.LETTERS[pos] + '.</span>' +
+              '<span>' + H.sanitize(q.answersHtml[ci] || q.answers[ci] || '', resolve) + '</span></div>');
           });
           out.push('</div>');
         }
@@ -216,27 +232,14 @@
     return '<w:p><w:pPr>' + pageBreak + keep + bdr + spacing + ind + jc + '</w:pPr>' + runs + '</w:p>';
   }
 
-  function imageParaXml(rId, widthPx, heightPx, indent) {
-    var cx = Math.round(widthPx * EMU_PER_PX), cy = Math.round(heightPx * EMU_PER_PX);
-    return '<w:p><w:pPr><w:ind w:left="' + (indent || 360) + '"/><w:spacing w:after="80"/></w:pPr><w:r><w:drawing>' +
-      '<wp:inline distT="0" distB="0" distL="0" distR="0">' +
-      '<wp:extent cx="' + cx + '" cy="' + cy + '"/><wp:docPr id="' + (rId.replace(/\D/g, '') || '1') + '" name="Picture ' + rId + '"/>' +
-      '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
-      '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
-      '<pic:nvPicPr><pic:cNvPr id="0" name="img"/><pic:cNvPicPr/></pic:nvPicPr>' +
-      '<pic:blipFill><a:blip r:embed="' + rId + '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
-      '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm>' +
-      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>' +
-      '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
-  }
 
-  // Word needs real pixel dimensions; read them from the base64 image
-  function imageSize(mime, b64) {
+  // Word needs real pixel dimensions; read them from the image itself
+  function measure(url) {
     return new Promise(function (resolve) {
       var img = new Image();
-      img.onload = function () { resolve({ w: img.naturalWidth || 400, h: img.naturalHeight || 300 }); };
-      img.onerror = function () { resolve({ w: 400, h: 300 }); };
-      img.src = 'data:' + mime + ';base64,' + b64;
+      img.onload = function () { resolve({ w: img.naturalWidth || 380, h: img.naturalHeight || 260 }); };
+      img.onerror = function () { resolve({ w: 380, h: 260 }); };
+      img.src = url;
     });
   }
 
@@ -264,6 +267,47 @@
     ));
     if (h.instructions) body.push(paraXml(runXml(h.instructions, { italic: true, size: 20 }), { after: 140 }));
 
+    // Images are embedded once and reused if the same picture appears twice
+    var imgByUrl = {};
+    var pending = [];
+    function addImage(ref) {
+      var url = TB.resolveImage(ref);
+      if (!url || url.indexOf('data:') !== 0) return null;   // remote/unavailable → caller falls back to alt text
+      if (imgByUrl[url]) return imgByUrl[url];
+      var m = url.match(/^data:([^;]+);base64,(.*)$/);
+      if (!m) return null;
+      var ext = (m[1].split('/')[1] || 'png').replace('jpeg', 'jpg').replace('svg+xml', 'png');
+      if (ext === 'png' && m[1] === 'image/svg+xml') return null;  // Word can't take SVG here
+      var rId = 'rId' + (100 + relSeq);
+      var name = 'image' + relSeq + '.' + ext;
+      relSeq++;
+      media.push({ name: name, bytes: b64ToUint8(m[2]) });
+      rels.push({ id: rId, target: 'media/' + name });
+      var dims = sizeCache[url] || { w: 380, h: 260 };
+      var maxW = 430;
+      var scale = dims.w > maxW ? maxW / dims.w : 1;
+      var placed = { rId: rId, w: dims.w * scale, h: dims.h * scale };
+      imgByUrl[url] = placed;
+      return placed;
+    }
+
+    // Measure every image up front (measuring is async, conversion isn't)
+    var sizeCache = {};
+    var allHtml = [];
+    version.sections.forEach(function (sec) {
+      sec.items.forEach(function (item) {
+        allHtml.push(item.q.html || '');
+        (item.q.answersHtml || []).forEach(function (a) { allHtml.push(a); });
+      });
+    });
+    for (var ai = 0; ai < allHtml.length; ai++) {
+      var refs = H.imageRefs(allHtml[ai]);
+      for (var ri = 0; ri < refs.length; ri++) {
+        var u = TB.resolveImage(refs[ri]);
+        if (u && u.indexOf('data:') === 0 && !sizeCache[u]) sizeCache[u] = await measure(u);
+      }
+    }
+
     for (var si = 0; si < version.sections.length; si++) {
       var sec = version.sections[si];
       if (sec.name) {
@@ -274,31 +318,33 @@
       for (var ii = 0; ii < sec.items.length; ii++) {
         var item = sec.items[ii], q = item.q;
 
-        body.push(paraXml(
-          runXml(item.number + '.  ', { bold: true }) + runXml(q.body),
-          { after: 40, keepNext: true }
-        ));
-
-        var im = TB.imageFor(q);
-        if (im) {
-          var size = await imageSize(im.mime, im.data);
-          var maxW = 430;                       // keeps images inside the margins
-          var scale = size.w > maxW ? maxW / size.w : 1;
-          var ext = (im.mime.split('/')[1] || 'png').replace('jpeg', 'jpg');
-          var rId = 'rId' + (100 + relSeq);
-          var name = 'image' + relSeq + '.' + ext;
-          relSeq++;
-          media.push({ name: name, bytes: b64ToUint8(im.data) });
-          rels.push({ id: rId, target: 'media/' + name });
-          body.push(imageParaXml(rId, size.w * scale, size.h * scale, 360));
+        if (q.type === 'TEXT') {
+          H.toOoxml(q.html, { indent: 240, addImage: addImage }).forEach(function (blk) { body.push(blk); });
+          body.push(paraXml('', { after: 80 }));
+          continue;
         }
+
+        // Question number sits in its own paragraph run ahead of the body, then
+        // the body's own blocks (which may include tables) follow.
+        var bodyBlocks = H.toOoxml(q.html, { indent: 0, addImage: addImage });
+        if (bodyBlocks.length && bodyBlocks[0].indexOf('<w:p>') === 0) {
+          // splice the number into the first paragraph so it reads "1.  Question"
+          bodyBlocks[0] = bodyBlocks[0].replace('</w:pPr>', '</w:pPr>' + runXml(item.number + '.  ', { bold: true }));
+        } else {
+          bodyBlocks.unshift(paraXml(runXml(item.number + '.', { bold: true }), { after: 20 }));
+        }
+        bodyBlocks.forEach(function (blk) { body.push(blk); });
 
         if (item.order && item.order.length && TB.CHOICE_TYPES.indexOf(q.type) !== -1) {
           for (var ci = 0; ci < item.order.length; ci++) {
-            body.push(paraXml(
-              runXml(TB.LETTERS[ci] + '.  ', { bold: true }) + runXml(q.answers[item.order[ci]]),
-              { indent: 480, after: 20 }
-            ));
+            var choiceHtml = q.answersHtml[item.order[ci]] || q.answers[item.order[ci]] || '';
+            var cBlocks = H.toOoxml(choiceHtml, { indent: 480, addImage: addImage });
+            if (cBlocks.length && cBlocks[0].indexOf('<w:p>') === 0) {
+              cBlocks[0] = cBlocks[0].replace('</w:pPr>', '</w:pPr>' + runXml(TB.LETTERS[ci] + '.  ', { bold: true }));
+            } else {
+              cBlocks.unshift(paraXml(runXml(TB.LETTERS[ci] + '.', { bold: true }), { indent: 480, after: 20 }));
+            }
+            cBlocks.forEach(function (blk) { body.push(blk); });
           }
         }
 

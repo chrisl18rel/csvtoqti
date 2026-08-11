@@ -87,6 +87,7 @@
   // reads as a mistake to students and gains nothing.
   function choiceOrder(q, rng, scramble) {
     if (!q.answers || !q.answers.length) return [];
+    if (TB.plainAnswers) TB.plainAnswers(q);
     var idx = [];
     for (var i = 0; i < q.answers.length; i++) {
       if (String(q.answers[i] || '').trim()) idx.push(i);
@@ -165,7 +166,8 @@
           var q = TB.findQuestion(uid);
           if (!q) return null;
           var order = choiceOrder(q, rng, blueprint.scrambleChoices);
-          return { q: q, order: order, answer: answerFor(q, order) };
+          var pts = (s.pointsEach !== '' && s.pointsEach != null) ? parseFloat(s.pointsEach) : (parseFloat(q.points) || 1);
+          return { q: q, order: order, answer: answerFor(q, order), points: pts };
         }).filter(Boolean);
         return { name: s.name || ('Section ' + (si + 1)), items: qs };
       });
@@ -182,8 +184,10 @@
       sections.forEach(function (sec) {
         sec.startNum = n + 1;
         sec.items.forEach(function (item) {
+          // Text blocks are instructions, not questions — they aren't numbered
+          if (item.q.type === 'TEXT') { item.number = null; return; }
           item.number = ++n;
-          totalPoints += (parseFloat(item.q.points) || 0);
+          totalPoints += (item.points != null ? item.points : (parseFloat(item.q.points) || 0));
         });
         sec.endNum = n;
       });
@@ -205,11 +209,12 @@
     var rows = [];
     version.sections.forEach(function (sec) {
       sec.items.forEach(function (item) {
+        if (item.q.type === 'TEXT') return;
         rows.push({
           number: item.number,
           type: item.q.type,
           answer: item.answer,
-          points: parseFloat(item.q.points) || 1,
+          points: item.points != null ? item.points : (parseFloat(item.q.points) || 1),
           bankName: item.q.bankName || '',
           section: sec.name || ''
         });

@@ -1,4 +1,4 @@
-# Batch Genie — Quiz Tools for Canvas (v7.2)
+# Batch Genie — Quiz Tools for Canvas (v7.3)
 
 Two tools on one page, switched with the tabs at the top:
 
@@ -11,7 +11,9 @@ Two tools on one page, switched with the tabs at the top:
 
 Built for the ExamView workflow: load banks → pick questions → split the test into sections → generate versions.
 
-**1. Question Banks.** Load one or many .zip files at once — Canvas question-bank exports or saved Batch Genie sessions. Each XML file inside a Canvas export becomes its own bank (Canvas puts each bank in a separate file), so a single zip can give you several banks to pull from. Check the banks you want active.
+**1. Question Banks.** Load your Canvas **course export (`.imscc`)** — Course Settings → Export Course Content → Course. That is the file that holds your question banks; a "quiz export" .zip usually comes out empty. Canvas quiz .zip exports and saved Batch Genie sessions also work. Every bank and quiz inside becomes a separate entry you can pull from, labelled BANK or QUIZ, with a filter box for finding the ones you want. A full course export scans in a couple of seconds; images stay compressed inside the archive and are pulled out only for the questions you actually use.
+
+Question types that can't work on paper — hot spot, matching, and ordering — are left out and reported, rather than printed as something broken.
 
 **2. Select Questions.** Browse everything in the active banks, filtered by type or a text search. Click **View** on any question to see it with its correct answer marked. Check the ones you want, or use **Select All Shown** or **🎲 Pick Random…** to grab N at random. A running counter shows how many are selected.
 
@@ -19,14 +21,16 @@ Built for the ExamView workflow: load banks → pick questions → split the tes
 
 **4. Versions & Scrambling.** Choose how many versions and name them whatever you like (A, B, C or Blue/Gold or 1st Period/3rd Period). Independently toggle: scramble question order within sections, scramble answer choices within each question, or scramble all questions across the whole test. Then decide whether every version uses the same questions in a different order, or draws a different random set each time.
 
-**5. Generate.** Preview each version's answer key inline, print any version, or download the whole package as a zip:
+**5. Generate.** Preview each version's answer key inline, print any version, or download the whole package as a zip. Question formatting is preserved: data tables, superscripts and subscripts, bold, lists, and images all carry through to both the printed page and the Word file. Formulas written with a shrunken font instead of a subscript tag are converted to real subscripts, so H₂SO₄ prints correctly.
 
 - `*.docx` — a real Word file per version, editable before printing. Images and chemistry Unicode carry over.
 - `*_print.html` — open and press Cmd+P to print or save as PDF.
 - `*_answer_keys.csv` — every version, one row per question, with section, type, points, and source bank.
 - `*_zipgrade_key.csv` — all versions in one file, ready to import into ZipGrade for bubble-sheet scanning.
 
-True/False choices are never scrambled (a reversed "False / True" reads as a mistake). Written-response questions get blank answer lines sized to the type and are left off the ZipGrade key, since a scanner can't grade them — the plain CSV still lists their answers for hand grading.
+True/False choices are never scrambled (a reversed "False / True" reads as a mistake). Written-response questions get blank answer lines sized to the type and are left off the ZipGrade key, since a scanner can't grade them — the plain CSV still lists their answers for hand grading. Text-only blocks from your banks print as unnumbered instructions. Set **Points each** on a section to override whatever the bank says, which matters because Canvas banks often store no point value.
+
+One limit worth knowing: LaTeX equation images (the ones Canvas hosts at instructure.com) render normally in the print/PDF copy, but in the Word file they are replaced with the equivalent symbol where one exists — an arrow, Δ, and so on. If a question depends on a complex equation image, print that version rather than using the .docx.
 
 ---
 
@@ -76,10 +80,10 @@ Point values: if the source document states point values, the AI uses them; othe
 
 ## Files
 
-`index.html` — page shell, tabs, and the AI extractor. `test-banks.js` — question-bank loading. `test-compose.js` — version building and scrambling. `test-export.js` — Word/print/CSV output. `test-builder.js` — the Paper Test Builder interface. `api-key-vault.gs` — the Google Apps Script key vault (deployed separately; contains no secrets, which live in Script Properties).
+`index.html` — page shell, tabs, and the AI extractor. `test-html.js` — HTML preservation (tables, sub/sup, images). `test-banks.js` — question-bank loading. `test-compose.js` — version building and scrambling. `test-export.js` — Word/print/CSV output. `test-builder.js` — the Paper Test Builder interface. `api-key-vault.gs` — the Google Apps Script key vault (deployed separately; contains no secrets, which live in Script Properties).
 
 **Deploying vault changes:** editing and saving the Apps Script does *not* update the live web app. You must go to Deploy → Manage deployments → edit the existing deployment (pencil icon) → Version: **New version** → Deploy. Editing the existing deployment keeps the same URL, so `VAULT_URL` in `index.html` stays valid; "New deployment" would create a different URL and break the link. Note also that the vault project may live under a different Google account than your default — check which account you're signed in as if changes appear to have no effect.
 
 ---
 
-Created by Chris Leatherwood — Tyler, TX · v7.2 · © 2025–2026
+Created by Chris Leatherwood — Tyler, TX · v7.1 · © 2025–2026

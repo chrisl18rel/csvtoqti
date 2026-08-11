@@ -22,12 +22,14 @@
   var sectionSeq = 1;
   var filterType = 'ALL';
   var filterText = '';
+  var bankFilter = '';
+  var MAX_ROWS = 250;   // banks hold thousands of questions; render a window
   var lastVersions = null;
   var expanded = {};          // uid -> true (question preview open)
 
   var TYPE_LABELS = {
     MC: 'Multiple Choice', MR: 'Multiple Response', TF: 'True/False',
-    NUM: 'Numerical', SA: 'Short Answer', FIB: 'Fill in Blanks', ESSAY: 'Essay'
+    NUM: 'Numerical', SA: 'Short Answer', FIB: 'Fill in Blanks', ESSAY: 'Essay', TEXT: 'Text Block'
   };
 
   function el(id) { return document.getElementById(id); }
@@ -39,12 +41,17 @@
       if (Object.keys(activeBanks).length && !activeBanks[q.bankId]) return false;
       if (filterType !== 'ALL' && q.type !== filterType) return false;
       if (filterText) {
-        var hay = (q.body + ' ' + (q.answers || []).join(' ')).toLowerCase();
-        if (hay.indexOf(filterText.toLowerCase()) === -1) return false;
+        if (TB.plain(q).toLowerCase().indexOf(filterText.toLowerCase()) === -1) return false;
       }
       return true;
     });
     return out;
+  }
+
+  function visibleBanks() {
+    return TB.banks.filter(function (b) {
+      return !bankFilter || b.name.toLowerCase().indexOf(bankFilter) !== -1;
+    });
   }
 
   // ── Status helper (styled, never a browser alert) ────────────────────────────
@@ -67,15 +74,21 @@
       // 1 — BANKS
       '<div class="card">',
       '  <h2><span class="step-dot" style="background:#0891b2">1</span>Question Banks</h2>',
-      '  <p style="font-size:13px;color:#555;margin:0 0 12px">Load Canvas question-bank exports (.zip) or saved Batch Genie sessions. Select several files at once to load a whole folder of banks.</p>',
+      '  <p style="font-size:13px;color:#555;margin:0 0 12px">Load your Canvas <strong>course export (.imscc)</strong> — that is the file that contains your question banks. Canvas quiz exports (.zip) and saved Batch Genie sessions also work. A full course export is large, so give it a minute to scan.</p>',
       '  <div class="btnrow">',
       '    <label class="btn btn-indigo" style="cursor:pointer;margin:0">',
       '      📂 Load Bank File(s)',
-      '      <input type="file" id="tbBankInput" accept=".zip" multiple style="display:none">',
+      '      <input type="file" id="tbBankInput" accept=".zip,.imscc" multiple style="display:none">',
       '    </label>',
       '    <button class="btn btn-gray btn-sm" id="tbClearBanks">Clear All Banks</button>',
       '  </div>',
-      '  <div id="tbBankList" style="margin-top:14px"></div>',
+      '  <div style="display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap">',
+      '    <input type="text" id="tbBankSearch" placeholder="Filter banks by name…" style="flex:1;min-width:180px;margin-bottom:0;padding:7px 12px;font-size:13px">',
+      '    <button class="btn btn-navy btn-sm" id="tbBanksAll">Check All Shown</button>',
+      '    <button class="btn btn-gray btn-sm" id="tbBanksNone">Uncheck All</button>',
+      '    <span class="q-count-badge" id="tbBankCount">0 banks</span>',
+      '  </div>',
+      '  <div id="tbBankList" style="margin-top:10px;max-height:300px;overflow-y:auto"></div>',
       '  <div id="tbBankStatus" class="status-msg" style="margin-top:10px"></div>',
       '</div>',
 
@@ -92,6 +105,7 @@
       '      <option value="SA">Short Answer</option>',
       '      <option value="FIB">Fill in Blanks</option>',
       '      <option value="ESSAY">Essay</option>',
+      '      <option value="TEXT">Text Block</option>',
       '    </select>',
       '    <input type="text" id="tbSearch" placeholder="Search question text…" style="width:auto;flex:1;min-width:160px;margin-bottom:0;padding:7px 12px;font-size:13px">',
       '    <button class="btn btn-navy btn-sm" id="tbSelectAll">Select All Shown</button>',
@@ -176,6 +190,14 @@
       TB.clearBanks(); selected = {}; activeBanks = {}; sections.forEach(function (s) { s.required = []; });
       renderBanks(); renderQuestions(); renderSections();
     });
+    el('tbBankSearch').addEventListener('input', function () { bankFilter = this.value.trim().toLowerCase(); renderBanks(); });
+    el('tbBanksAll').addEventListener('click', function () {
+      visibleBanks().forEach(function (b) { activeBanks[b.id] = true; });
+      renderBanks(); renderQuestions();
+    });
+    el('tbBanksNone').addEventListener('click', function () {
+      activeBanks = {}; renderBanks(); renderQuestions();
+    });
     el('tbFilterType').addEventListener('change', function () { filterType = this.value; renderQuestions(); });
     el('tbSearch').addEventListener('input', function () { filterText = this.value.trim(); renderQuestions(); });
     el('tbSelectAll').addEventListener('click', function () {
@@ -202,20 +224,52 @@
     var files = (input.target || input).files;
     if (!files || !files.length) return;
     var statusEl = el('tbBankStatus');
-    statusEl.className = 'status-msg show status-loading';
-    statusEl.innerHTML = '<span class="spinner"></span> Reading bank file(s)…';
+    function prog(msg) {
+      statusEl.className = 'status-msg show status-loading';
+      statusEl.innerHTML = '<span class="spinner"></span> ' + esc(msg);
+    }
+    prog('Opening file…');
+    // let the spinner paint before the heavy work begins
+    await new Promise(function (r) { setTimeout(r, 30); });
 
-    var res = await TB.loadBankFiles(files);
-    res.added.forEach(function (b) { activeBanks[b.id] = true; });
+    var res;
+    try {
+      res = await TB.loadBankFiles(files, prog);
+    } catch (err) {
+      statusEl.className = 'status-msg show status-error';
+      statusEl.innerHTML = '⚠ ' + esc(err.message);
+      return;
+    }
+    TB.resetIndex();
 
-    var msg = '✅ Loaded ' + res.added.length + ' bank' + (res.added.length !== 1 ? 's' : '') +
-      ' — ' + res.added.reduce(function (n, b) { return n + b.questions.length; }, 0) + ' questions.';
+    // A course export holds hundreds of banks; leave them unchecked so the
+    // question list isn't 9,000 rows on first load.
+    var autoCheck = res.added.length <= 5;
+    res.added.forEach(function (b) { if (autoCheck) activeBanks[b.id] = true; });
+
+    var totalQ = res.added.reduce(function (n, b) { return n + b.questions.length; }, 0);
+    var banksN = res.added.filter(function (b) { return b.kind === 'bank'; }).length;
+    var quizN  = res.added.filter(function (b) { return b.kind === 'quiz'; }).length;
+
+    var msg = '✅ Loaded <strong>' + res.added.length + '</strong> item' + (res.added.length !== 1 ? 's' : '') +
+      (banksN ? ' — ' + banksN + ' question bank' + (banksN !== 1 ? 's' : '') : '') +
+      (quizN ? ', ' + quizN + ' quiz' + (quizN !== 1 ? 'zes' : '') : '') +
+      ' — <strong>' + totalQ.toLocaleString() + '</strong> questions.';
+    if (!autoCheck) msg += '<br>Use the filter box and checkboxes above to choose which banks to pull from.';
+
+    var unsup = res.report && res.report.unsupported ? res.report.unsupported : {};
+    var unsupKeys = Object.keys(unsup);
+    if (unsupKeys.length) {
+      msg += '<br><span style="color:#92400e">Left out (can\'t work on paper): ' +
+        unsupKeys.map(function (k) { return unsup[k] + ' ' + k.replace(/_question$/, '').replace(/_/g, ' '); }).join(', ') + '.</span>';
+    }
     if (res.skipped.length) {
       msg += '<br><span style="color:#92400e">Skipped: ' +
-        res.skipped.map(function (s) { return esc(s.name) + ' (' + esc(s.reason) + ')'; }).join('; ') + '</span>';
+        res.skipped.map(function (s2) { return esc(s2.name) + ' (' + esc(s2.reason) + ')'; }).join('; ') + '</span>';
     }
+
     statusEl.className = 'status-msg show ' + (res.added.length ? 'status-done' : 'status-error');
-    statusEl.innerHTML = res.added.length ? msg : '⚠ No banks loaded. ' + msg;
+    statusEl.innerHTML = res.added.length ? msg : '⚠ Nothing loaded. ' + msg;
 
     (input.target || input).value = '';
     renderBanks(); renderQuestions(); renderSections();
@@ -265,34 +319,46 @@
   // ─────────────────────────────────────────────────────────────────────────────
   function renderBanks() {
     var wrap = el('tbBankList');
+    var shown = visibleBanks();
+    var activeCount = TB.banks.filter(function (b) { return activeBanks[b.id]; }).length;
+    el('tbBankCount').textContent = activeCount + ' of ' + TB.banks.length + ' banks checked';
+
     if (!TB.banks.length) {
       wrap.innerHTML = '<div style="background:#f4f4fc;border:1.5px dashed #c8c8ea;border-radius:10px;padding:18px;text-align:center;font-size:13px;color:#888">No banks loaded yet.</div>';
       return;
     }
-    wrap.innerHTML = '<div style="font-size:12px;font-weight:700;color:#444;margin-bottom:8px">Check the banks you want to pull questions from:</div>' +
-      TB.banks.map(function (b) {
-        return '<div style="display:flex;align-items:center;gap:10px;background:#f4f4fc;border:1.5px solid #e0e0f0;border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:13px">' +
-          '<input type="checkbox" data-bank="' + b.id + '" class="tbBankChk" ' + (activeBanks[b.id] ? 'checked' : '') + ' style="width:16px;height:16px;accent-color:#6465F1;margin:0">' +
-          '<span style="flex:1"><strong>' + esc(b.name) + '</strong>' +
-          '<span style="color:#888"> — ' + esc(b.sourceFile) + '</span></span>' +
-          '<span style="color:#6465F1;font-weight:700">' + b.questions.length + ' questions</span>' +
-          '<button class="btn btn-red btn-sm" data-rmbank="' + b.id + '">✕</button>' +
-          '</div>';
-      }).join('');
+    if (!shown.length) {
+      wrap.innerHTML = '<div style="padding:16px;text-align:center;font-size:13px;color:#888">No bank names match that filter.</div>';
+      return;
+    }
+
+    var slice = shown.slice(0, 400);
+    wrap.innerHTML = slice.map(function (b) {
+      var badge = b.kind === 'bank' ? 'BANK' : (b.kind === 'quiz' ? 'QUIZ' : 'SESSION');
+      var color = b.kind === 'bank' ? '#0891b2' : (b.kind === 'quiz' ? '#8F37EB' : '#059669');
+      return '<div style="display:flex;align-items:center;gap:9px;background:#f4f4fc;border:1.5px solid #e0e0f0;border-radius:8px;padding:7px 11px;margin-bottom:5px;font-size:13px">' +
+        '<input type="checkbox" data-bank="' + b.id + '" class="tbBankChk" ' + (activeBanks[b.id] ? 'checked' : '') + ' style="width:16px;height:16px;accent-color:#6465F1;margin:0;flex-shrink:0">' +
+        '<span style="background:' + color + ';color:#fff;border-radius:5px;padding:2px 6px;font-size:10px;font-weight:700;flex-shrink:0">' + badge + '</span>' +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>' + esc(b.name) + '</strong></span>' +
+        '<span style="color:#6465F1;font-weight:700;flex-shrink:0">' + b.questions.length + '</span>' +
+        '<button class="btn btn-red btn-sm" data-rmbank="' + b.id + '" style="padding:3px 8px;font-size:11px;flex-shrink:0">✕</button>' +
+        '</div>';
+    }).join('') +
+    (shown.length > slice.length
+      ? '<div style="padding:8px;text-align:center;font-size:12px;color:#888">Showing ' + slice.length + ' of ' + shown.length + ' — type in the filter box to narrow the list.</div>'
+      : '');
 
     wrap.querySelectorAll('.tbBankChk').forEach(function (c) {
       c.addEventListener('change', function () {
         if (this.checked) activeBanks[this.dataset.bank] = true; else delete activeBanks[this.dataset.bank];
-        renderQuestions();
+        renderBanks(); renderQuestions();
       });
     });
     wrap.querySelectorAll('[data-rmbank]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = this.dataset.rmbank;
-        TB.banks.filter(function (b) { return b.id === id; }).forEach(function (b) {
-          b.questions.forEach(function (q) { delete selected[q.uid]; });
-        });
-        TB.removeBank(id); delete activeBanks[id];
+        (TB.banks.find(function (b) { return b.id === id; }) || { questions: [] }).questions.forEach(function (q) { delete selected[q.uid]; });
+        TB.removeBank(id); delete activeBanks[id]; TB.resetIndex();
         renderBanks(); renderQuestions(); renderSections();
       });
     });
@@ -308,24 +374,29 @@
 
     if (!qs.length) {
       list.innerHTML = '<div style="padding:26px;text-align:center;font-size:13px;color:#888">' +
-        (TB.banks.length ? 'No questions match these filters.' : 'Load a question bank above to get started.') + '</div>';
+        (TB.banks.length ? 'No questions match these filters. Check a bank above, or widen the type/search filters.' : 'Load a question bank above to get started.') + '</div>';
       return;
     }
 
-    list.innerHTML = qs.map(function (q) {
-      var isOpen = !!expanded[q.uid];
-      var preview = String(q.body || '').replace(/\s+/g, ' ').trim();
-      return '<div class="q-card" style="margin-bottom:6px;padding:10px 12px">' +
-        '<div style="display:flex;align-items:center;gap:9px">' +
-        '<input type="checkbox" class="tbQChk" data-uid="' + q.uid + '" ' + (selected[q.uid] ? 'checked' : '') + ' style="width:17px;height:17px;accent-color:#6465F1;margin:0;flex-shrink:0">' +
-        '<span class="type-pill tp-' + q.type + '" style="flex-shrink:0">' + q.type + '</span>' +
-        '<span style="flex:1;font-size:13px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(preview.substring(0, 110)) + (preview.length > 110 ? '…' : '') + '</span>' +
-        '<span style="font-size:11px;color:#888;flex-shrink:0;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(q.bankName || '') + '</span>' +
-        '<button class="btn btn-gray btn-sm" data-toggle="' + q.uid + '" style="flex-shrink:0">' + (isOpen ? 'Hide' : 'View') + '</button>' +
-        '</div>' +
-        (isOpen ? renderQuestionDetail(q) : '') +
-        '</div>';
-    }).join('');
+    var slice = qs.slice(0, MAX_ROWS);
+    list.innerHTML =
+      (qs.length > slice.length
+        ? '<div style="padding:7px 10px;margin-bottom:6px;background:#eef2ff;border-radius:8px;font-size:12px;color:#3730a3">Showing the first ' + MAX_ROWS + ' of ' + qs.length + ' matching questions. <strong>Select All Shown</strong> and <strong>Pick Random</strong> still use all ' + qs.length + '.</div>'
+        : '') +
+      slice.map(function (q) {
+        var isOpen = !!expanded[q.uid];
+        var preview = TB.plain(q);
+        return '<div class="q-card" style="margin-bottom:6px;padding:10px 12px">' +
+          '<div style="display:flex;align-items:center;gap:9px">' +
+          '<input type="checkbox" class="tbQChk" data-uid="' + q.uid + '" ' + (selected[q.uid] ? 'checked' : '') + ' style="width:17px;height:17px;accent-color:#6465F1;margin:0;flex-shrink:0">' +
+          '<span class="type-pill tp-' + q.type + '" style="flex-shrink:0">' + q.type + '</span>' +
+          '<span style="flex:1;font-size:13px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(preview.substring(0, 110)) + (preview.length > 110 ? '…' : '') + '</span>' +
+          '<span style="font-size:11px;color:#888;flex-shrink:0;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(q.bankName || '') + '</span>' +
+          '<button class="btn btn-gray btn-sm" data-toggle="' + q.uid + '" style="flex-shrink:0">' + (isOpen ? 'Hide' : 'View') + '</button>' +
+          '</div>' +
+          (isOpen ? '<div id="qd-' + q.uid + '">' + renderQuestionDetail(q) + '</div>' : '') +
+          '</div>';
+      }).join('');
 
     list.querySelectorAll('.tbQChk').forEach(function (c) {
       c.addEventListener('change', function () {
@@ -335,28 +406,34 @@
       });
     });
     list.querySelectorAll('[data-toggle]').forEach(function (b) {
-      b.addEventListener('click', function () {
+      b.addEventListener('click', async function () {
         var uid = this.dataset.toggle;
         expanded[uid] = !expanded[uid];
+        if (expanded[uid]) {
+          var q = TB.findQuestion(uid);
+          this.textContent = '…';
+          await TB.ensureImages([q]);      // pull this question's pictures out of the archive
+        }
         renderQuestions();
       });
     });
   }
 
+  // Full question preview, rendered as real HTML so tables and superscripts show
   function renderQuestionDetail(q) {
-    var im = TB.imageFor(q);
+    var resolve = TB.resolveImage;
     var html = '<div style="margin-top:10px;padding-top:10px;border-top:1.5px solid #e8e8f5;font-size:13px">' +
-      '<div style="margin-bottom:6px">' + esc(q.body).replace(/\n/g, '<br>') + '</div>';
-    if (im) html += '<img src="data:' + im.mime + ';base64,' + im.data + '" style="max-width:280px;max-height:170px;border-radius:6px;border:1px solid #e0e0f0;margin-bottom:8px;display:block">';
+      '<div class="tbPrev" style="margin-bottom:6px">' + TBHtml.sanitize(q.html || '', resolve) + '</div>';
 
-    if (TB.CHOICE_TYPES.indexOf(q.type) !== -1 && q.answers) {
-      html += '<div style="margin-left:12px">' + q.answers.map(function (a, i) {
-        if (!String(a || '').trim()) return '';
+    if (TB.CHOICE_TYPES.indexOf(q.type) !== -1 && q.answersHtml && q.answersHtml.length) {
+      html += '<div style="margin-left:12px">' + q.answersHtml.map(function (a, i) {
+        var plain = TBHtml.toPlain(a);
+        if (!plain) return '';
         var isC = (q.correct || []).indexOf(i) !== -1;
-        return '<div style="margin:2px 0;' + (isC ? 'color:#065f46;font-weight:700' : 'color:#444') + '">' +
-          (isC ? '✓ ' : '&nbsp;&nbsp;&nbsp;') + esc(a) + '</div>';
+        return '<div class="tbPrev" style="margin:2px 0;display:flex;gap:6px;' + (isC ? 'color:#065f46;font-weight:700' : 'color:#444') + '">' +
+          '<span>' + (isC ? '✓' : '&nbsp;&nbsp;') + '</span><span>' + TBHtml.sanitize(a, resolve) + '</span></div>';
       }).join('') + '</div>';
-    } else {
+    } else if (q.type !== 'TEXT') {
       var ans = TB.answerFor(q, []);
       if (ans) html += '<div style="margin-left:12px;color:#065f46;font-weight:700">Answer: ' + esc(ans) + '</div>';
     }
@@ -372,6 +449,7 @@
       id: 'sec_' + (sectionSeq++),
       name: 'Part ' + romanize(sections.length + 1),
       count: 10,
+      pointsEach: '',
       types: [],
       bankIds: [],
       required: []
@@ -427,7 +505,7 @@
 
       var reqList = sec.required.map(function (uid) {
         var q = TB.findQuestion(uid);
-        var label = q ? String(q.body).replace(/\s+/g, ' ').substring(0, 60) : '(missing question)';
+        var label = q ? TB.plain(q).substring(0, 60) : '(missing question)';
         return '<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e0e0f0;border-radius:6px;padding:5px 9px;margin-bottom:4px;font-size:12px">' +
           '<span class="type-pill tp-' + (q ? q.type : 'MC') + '" style="font-size:10px;padding:2px 6px">' + (q ? q.type : '?') + '</span>' +
           '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(label) + '</span>' +
@@ -443,10 +521,11 @@
         '<div class="row2" style="margin-bottom:8px">' +
         '<div><label style="font-size:12px">How many questions in this section</label>' +
         '<input type="number" class="tbSecCount" data-sec="' + sec.id + '" value="' + sec.count + '" min="1" max="200" style="margin-bottom:0"></div>' +
-        '<div><label style="font-size:12px">Available to draw from</label>' +
-        '<div style="padding:9px 0;font-size:13px;font-weight:700;color:' + (short ? '#dc3545' : '#059669') + '">' +
-        pool.length + ' question' + (pool.length !== 1 ? 's' : '') + (short ? ' — not enough!' : ' ready') + '</div></div>' +
+        '<div><label style="font-size:12px">Points each <span style="font-weight:400;color:#888">(blank = use the bank\'s value)</span></label>' +
+        '<input type="number" class="tbSecPts" data-sec="' + sec.id + '" value="' + (sec.pointsEach || '') + '" min="0" step="0.5" placeholder="e.g. 2" style="margin-bottom:0"></div>' +
         '</div>' +
+        '<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:' + (short ? '#dc3545' : '#059669') + '">' +
+        pool.length + ' question' + (pool.length !== 1 ? 's' : '') + ' available to draw from' + (short ? ' — not enough for ' + sec.count + '!' : '') + '</div>' +
         '<label style="font-size:12px;margin-bottom:4px">Limit to question types <span style="font-weight:400;color:#888">(none checked = any type)</span></label>' +
         '<div style="margin-bottom:8px">' + typeChips + '</div>' +
         '<label style="font-size:12px;margin-bottom:4px">Limit to banks <span style="font-weight:400;color:#888">(none checked = any bank)</span></label>' +
@@ -474,6 +553,12 @@
       i.addEventListener('input', function () {
         findSec(this.dataset.sec).count = Math.max(1, parseInt(this.value, 10) || 1);
         renderSections();
+      });
+    });
+    wrap.querySelectorAll('.tbSecPts').forEach(function (i) {
+      i.addEventListener('input', function () {
+        var v = parseFloat(this.value);
+        findSec(this.dataset.sec).pointsEach = isFinite(v) && v >= 0 ? v : '';
       });
     });
     wrap.querySelectorAll('.tbSecType').forEach(function (c) {
@@ -528,7 +613,7 @@
             var q = TB.findQuestion(uid);
             return '<div style="display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid #e8e8f5;border-radius:8px;margin-bottom:5px;font-size:13px">' +
               '<span class="type-pill tp-' + q.type + '" style="font-size:10px;padding:2px 6px">' + q.type + '</span>' +
-              '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(String(q.body).replace(/\s+/g, ' ').substring(0, 80)) + '</span>' +
+              '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(TB.plain(q).substring(0, 80)) + '</span>' +
               '<button class="btn btn-green btn-sm" data-pick="' + uid + '">Add</button></div>';
           }).join('')
         : '<p style="font-size:13px;color:#888;text-align:center;padding:20px">No eligible questions. Select questions in step 2 first (and check this section\'s type/bank limits).</p>') +
@@ -562,18 +647,32 @@
       scrambleChoices: el('tbScrambleC').checked,
       scrambleWholeTest: el('tbScrambleAll').checked,
       sections: sections.map(function (s) {
-        return { name: s.name, count: s.count, pool: sectionPool(s), required: s.required.slice() };
+        return { name: s.name, count: s.count, pool: sectionPool(s), required: s.required.slice(), pointsEach: s.pointsEach };
       })
     };
   }
 
-  function onGenerate() {
+  async function onGenerate() {
     if (!sections.length) { tbStatus('⚠ Add at least one section in step 3 first.', 'warn'); return; }
     if (!selectedUids().length) { tbStatus('⚠ No questions selected. Pick some in step 2 first.', 'warn'); return; }
+
+    var btn = el('tbGenerate');
+    btn.disabled = true; btn.textContent = 'Generating…';
 
     var bp = currentBlueprint();
     var res = TB.buildVersions(bp);
     lastVersions = { versions: res.versions, blueprint: bp };
+
+    // Pull every picture these versions need out of the archive before rendering
+    var used = {};
+    res.versions.forEach(function (v) {
+      v.sections.forEach(function (sec) { sec.items.forEach(function (it) { used[it.q.uid] = it.q; }); });
+    });
+    var usedList = Object.keys(used).map(function (k) { return used[k]; });
+    tbStatus('<span class="spinner"></span> Loading images for ' + usedList.length + ' questions…', 'info');
+    await TB.ensureImages(usedList, function (m) { tbStatus('<span class="spinner"></span> ' + esc(m), 'info'); });
+
+    btn.disabled = false; btn.textContent = '⚙ Generate Versions';
 
     var msg = '✅ Built ' + res.versions.length + ' version' + (res.versions.length !== 1 ? 's' : '') + ': ' +
       res.versions.map(function (v) { return '<strong>' + esc(v.name) + '</strong> (' + v.questionCount + ' q, ' + v.totalPoints + ' pts)'; }).join(' · ');
