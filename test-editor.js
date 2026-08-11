@@ -20,7 +20,9 @@
 
   var EDITABLE_TYPES = ['MC', 'MR', 'TF', 'NUM', 'SA', 'ESSAY', 'FIB', 'MATCH', 'TEXT'];
 
-  function esc2(s) { return global.esc(s); }
+  // esc() comes from index.html's script as a lexical binding, so it is
+  // referenced directly rather than off the global object.
+  function esc2(s) { return esc(s); }
 
   // Working copy so Cancel really cancels
   function cloneQ(q) {
@@ -299,7 +301,7 @@
       readTextInputs();
       var errs = problems();
       if (errs.length) {
-        if (global.showAppAlert) global.showAppAlert('Fix these first', '<ul style="margin:0;padding-left:20px">' +
+        if (typeof showAppAlert === 'function') showAppAlert('Fix these first', '<ul style="margin:0;padding-left:20px">' +
           errs.map(function (e) { return '<li>' + esc2(e) + '</li>'; }).join('') + '</ul>');
         return;
       }
