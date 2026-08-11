@@ -113,8 +113,10 @@
       return letters.join('');
     }
     if (q.type === 'FIB') {
-      return Object.keys(q.fib_blanks || {})
-        .map(function (bid) { return bid + ': ' + ((q.fib_blanks[bid] || {}).correct || ''); })
+      // Blank names in a Canvas export are UUIDs, so number them by the order
+      // they appear in the question instead: "1: 20; 2: 40".
+      return TB.fibOrder(q)
+        .map(function (bid, i) { return (i + 1) + ': ' + ((q.fib_blanks[bid] || {}).correct || ''); })
         .join('; ');
     }
     if (q.type === 'MATCH') {
@@ -126,6 +128,18 @@
     return q.suggested_answer || '';
   }
   TB.answerFor = answerFor;
+
+  // Blank ids in the order they appear in the question text
+  TB.fibOrder = function (q) {
+    var ids = Object.keys(q.fib_blanks || {});
+    if (!ids.length) return [];
+    var found = [], re = /\[([^\]\s]{1,64})\]/g, m;
+    while ((m = re.exec(q.html || '')) !== null) {
+      if (q.fib_blanks[m[1]] && found.indexOf(m[1]) === -1) found.push(m[1]);
+    }
+    ids.forEach(function (id) { if (found.indexOf(id) === -1) found.push(id); });
+    return found;
+  };
 
   // ── Build every version ─────────────────────────────────────────────────────
   // Returns { versions: [...], warnings: [...] }

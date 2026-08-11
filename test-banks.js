@@ -45,6 +45,12 @@
 
   function firstMatch(str, re) { var m = str.match(re); return m ? m[1] : ''; }
 
+  // Cheap plain text for short answer labels. A course export has tens of
+  // thousands of these; routing each through the DOM parser is far too slow.
+  function quickText(x) {
+    return decodeEntities(String(x || '')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
   // ── One <item> → question object ────────────────────────────────────────────
   function parseItem(itemXml, bank) {
     var rawType = firstMatch(itemXml, /<fieldlabel>\s*question_type\s*<\/fieldlabel>\s*<fieldentry>\s*([^<]+?)\s*<\/fieldentry>/);
@@ -165,10 +171,24 @@
       q.matchPrompts = q.matchPrompts.filter(function (pr) { return pr.correct >= 0 && (pr.html || '').trim(); });
       if (!q.matchPrompts.length) return { skipped: 'matching_question' };
     } else if (type === 'FIB') {
-      // Each blank is a <response_lid>/<response_str> whose ident names the blank
-      var blanks = [];
-      var rsRe = /<response_(?:str|lid)\s+ident="([^"]+)"/g, rm;
-      while ((rm = rsRe.exec(presXml)) !== null) blanks.push(rm[1]);
+      // Canvas keeps each blank in its own <response_lid ident="response_X">.
+      // The scoring rule names the *answer id*, and the answer text lives in a
+      // <response_label> inside that blank — so resolve id → text, otherwise the
+      // answer key comes out full of UUIDs.
+      var blankOrder = [], labelText = {};
+      var lidRe2 = /<response_lid\s+ident="([^"]+)"[^>]*>([\s\S]*?)<\/response_lid>/g, lm2;
+      while ((lm2 = lidRe2.exec(presXml)) !== null) {
+        blankOrder.push(lm2[1]);
+        var lrRe = /<response_label[^>]*\sident="([^"]+)"[^>]*>[\s\S]*?<mattext[^>]*>([\s\S]*?)<\/mattext>/g, lr;
+        while ((lr = lrRe.exec(lm2[2])) !== null) {
+          labelText[lr[1].trim()] = quickText(lr[2]);
+        }
+      }
+      // Older/simpler exports use <response_str> per blank instead
+      if (!blankOrder.length) {
+        var rsRe = /<response_str\s+ident="([^"]+)"/g, rm;
+        while ((rm = rsRe.exec(presXml)) !== null) blankOrder.push(rm[1]);
+      }
 
       var ansMap = {};
       var condRe3 = /<respcondition[^>]*>([\s\S]*?)<\/respcondition>/g, cm3;
@@ -177,12 +197,24 @@
         var sv3 = block.match(/<setvar[^>]*>([\d.]+)<\/setvar>/);
         if (sv3 && parseFloat(sv3[1]) <= 0) continue;
         var pair = block.match(/<varequal\s+respident="([^"]+)"[^>]*>([^<]+)<\/varequal>/);
-        if (pair && !ansMap[pair[1]]) ansMap[pair[1]] = decodeEntities(pair[2].trim());
+        if (!pair) continue;
+        var respId = pair[1], val = decodeEntities(pair[2].trim());
+        if (ansMap[respId]) continue;
+        var text = labelText[val];
+        if (text === undefined) text = labelText[val + '-0'];        // some exports omit the suffix
+        if (text === undefined) {                                     // or add one we don't expect
+          var pref = Object.keys(labelText).filter(function (k) { return k.indexOf(val) === 0; });
+          if (pref.length) text = labelText[pref[0]];
+        }
+        // If it still only resolves to an internal id, leave it blank rather
+        // than printing a UUID onto an answer key.
+        if (text === undefined) text = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(val) ? '' : val;
+        ansMap[respId] = text;
       }
-      blanks.forEach(function (b) {
+
+      blankOrder.forEach(function (b) {
         var clean = b.replace(/^response_/, '');
-        // Batch Genie's own QTI export prefixes blank names with q<number>_ to
-        // keep them unique across a quiz; strip that so keys read plainly.
+        // Batch Genie's own QTI export prefixes blank names with q<number>_
         var pretty = clean.replace(/^q\d+_/, '') || clean;
         q.fib_blanks[pretty] = { correct: ansMap[b] || ansMap[clean] || '', blooket_distractors: [] };
         if (pretty !== clean) q.html = q.html.split('[' + clean + ']').join('[' + pretty + ']');

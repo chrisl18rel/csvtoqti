@@ -48,6 +48,20 @@
     return out;
   }
 
+  // Banks that contributed at least one selected question — those are the only
+  // ones worth offering as a section filter.
+  function banksInPlay() {
+    var ids = {};
+    selectedUids().forEach(function (uid) {
+      var q = TB.findQuestion(uid);
+      if (q) ids[q.bankId] = true;
+    });
+    var list = TB.banks.filter(function (b) { return ids[b.id]; });
+    if (list.length) return list;
+    // Nothing selected yet — fall back to the banks checked in step 1
+    return TB.banks.filter(function (b) { return activeBanks[b.id]; });
+  }
+
   function visibleBanks() {
     return TB.banks.filter(function (b) {
       return !bankFilter || b.name.toLowerCase().indexOf(bankFilter) !== -1;
@@ -386,7 +400,7 @@
         : '') +
       slice.map(function (q) {
         var isOpen = !!expanded[q.uid];
-        var preview = TB.plain(q);
+        var preview = q.type === 'FIB' && TB.fibBlanksToRules ? TBHtml.toPlain(TB.fibBlanksToRules(q.html)) : TB.plain(q);
         return '<div class="q-card" style="margin-bottom:6px;padding:10px 12px">' +
           '<div style="display:flex;align-items:center;gap:9px">' +
           '<input type="checkbox" class="tbQChk" data-uid="' + q.uid + '" ' + (selected[q.uid] ? 'checked' : '') + ' style="width:17px;height:17px;accent-color:#6465F1;margin:0;flex-shrink:0">' +
@@ -423,8 +437,10 @@
   // Full question preview, rendered as real HTML so tables and superscripts show
   function renderQuestionDetail(q) {
     var resolve = TB.resolveImage;
+    // Fill-in-the-blank placeholders read as blanks here too, not raw markers
+    var bodyHtml = (q.type === 'FIB' && TB.fibBlanksToRules) ? TB.fibBlanksToRules(q.html) : q.html;
     var html = '<div style="margin-top:10px;padding-top:10px;border-top:1.5px solid #e8e8f5;font-size:13px">' +
-      '<div class="tbPrev" style="margin-bottom:6px">' + TBHtml.sanitize(q.html || '', resolve) + '</div>';
+      '<div class="tbPrev" style="margin-bottom:6px">' + TBHtml.sanitize(bodyHtml || '', resolve) + '</div>';
 
     if (TB.CHOICE_TYPES.indexOf(q.type) !== -1 && q.answersHtml && q.answersHtml.length) {
       html += '<div style="margin-left:12px">' + q.answersHtml.map(function (a, i) {
@@ -562,9 +578,10 @@
         ' style="width:15px;height:15px;accent-color:#6465F1;margin:0">' + t + '</label>';
     }).join('');
 
+    var inPlay = banksInPlay().length;
     var bankLabel = sec.bankIds.length
-      ? sec.bankIds.length + ' bank' + (sec.bankIds.length !== 1 ? 's' : '') + ' chosen'
-      : 'All banks';
+      ? sec.bankIds.length + ' of ' + inPlay + ' bank' + (inPlay !== 1 ? 's' : '') + ' chosen'
+      : 'All ' + inPlay + ' bank' + (inPlay !== 1 ? 's' : '') + ' you pulled from';
 
     return '<div style="margin-top:8px">' +
       '<div style="font-size:12px;color:#666;margin-bottom:6px">Leave these alone to pull from everything you selected.</div>' +
@@ -678,8 +695,9 @@
     box.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:640px;max-width:94vw;max-height:80vh;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(32,29,82,.25);z-index:3001;display:flex;flex-direction:column;overflow:hidden';
     document.body.appendChild(ov); document.body.appendChild(box);
 
+    var pool = banksInPlay();
     function draw() {
-      var shown = TB.banks.filter(function (b) {
+      var shown = pool.filter(function (b) {
         return !search || b.name.toLowerCase().indexOf(search) !== -1;
       });
       var n = Object.keys(chosen).length;
@@ -690,7 +708,9 @@
         '<span style="font-size:12px;color:#666">' + (n ? n + ' chosen' : 'none chosen = all banks') + '</span>' +
         '</div>' +
         '<div id="tbBpList" style="padding:10px 20px;overflow-y:auto;flex:1">' +
-        (shown.length
+        (!pool.length
+          ? '<p style="font-size:13px;color:#888;text-align:center;padding:20px">Select some questions in step 2 first — then the banks they came from show up here.</p>'
+          : shown.length
           ? shown.slice(0, 300).map(function (b) {
               return '<label style="display:flex;align-items:center;gap:9px;padding:6px 8px;border:1px solid #e8e8f5;border-radius:8px;margin-bottom:4px;font-size:13px;font-weight:400;cursor:pointer">' +
                 '<input type="checkbox" data-bp="' + b.id + '" ' + (chosen[b.id] ? 'checked' : '') + ' style="width:16px;height:16px;accent-color:#6465F1;margin:0">' +
