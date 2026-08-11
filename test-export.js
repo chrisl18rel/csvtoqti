@@ -95,6 +95,18 @@
 
   var H = global.TBHtml;
 
+  // Canvas stores fill-in-the-blank placeholders as [blank_name] inside the
+  // question text, and in real exports those names are UUIDs. Printing them
+  // raw is useless, so each becomes a ruled blank instead.
+  function fibBlanksToRules(html) {
+    return String(html || '').replace(/\[[A-Za-z0-9_\-]{1,64}\]/g, '__________');
+  }
+  TB.fibBlanksToRules = fibBlanksToRules;
+
+  function bodyHtmlFor(q) {
+    return q.type === 'FIB' ? fibBlanksToRules(q.html) : q.html;
+  }
+
   function headerLines(blueprint, version) {
     return {
       title: blueprint.title || 'Test',
@@ -137,6 +149,12 @@
       'table.qtable td,table.qtable th{border:1px solid #666;padding:3px 7px;vertical-align:top}' +
       'img{max-width:100%;max-height:2.4in}' +
       '.blank{border-bottom:1px solid #000;height:1.5em;margin:6px 26px 0 26px}' +
+      '.matchbank{margin:6px 0 8px 26px;padding:7px 10px;border:1px solid #999;display:inline-block;min-width:45%}' +
+      '.matchprompts{margin:4px 0 0 26px}' +
+      '.mrow{display:flex;gap:8px;align-items:flex-start;margin:3px 0}' +
+      '.mnum{font-weight:700;min-width:26px}' +
+      '.mline{border-bottom:1px solid #000;min-width:44px;display:inline-block}' +
+      '.mtext p{margin:0}' +
       '.foot{margin-top:24px;border-top:1px solid #999;padding-top:6px;font-size:9pt;text-align:center;color:#333}' +
       '@media print{.noprint{display:none}}' +
       '</style></head><body>');
@@ -167,8 +185,29 @@
           return;
         }
 
+        // Matching prints as a lettered choice bank plus one numbered blank
+        // per prompt — the standard paper layout.
+        if (q.type === 'MATCH') {
+          out.push('<div class="q"><div class="qtext"><span class="qnum">' +
+            (item.numbers && item.numbers.length ? item.numbers[0] + '–' + item.numbers[item.numbers.length - 1] : item.number) +
+            '.</span><div class="qbody">' + H.sanitize(q.html, resolve) + '</div></div>');
+          out.push('<div class="matchbank">');
+          item.order.forEach(function (ci, pos) {
+            out.push('<div class="choice"><span class="cl">' + TB.LETTERS[pos] + '.</span><span>' +
+              H.sanitize(q.answersHtml[ci] || '', resolve) + '</span></div>');
+          });
+          out.push('</div><div class="matchprompts">');
+          (item.promptOrder || []).forEach(function (pIdx, k) {
+            var pr = q.matchPrompts[pIdx];
+            out.push('<div class="mrow"><span class="mnum">' + (item.numbers ? item.numbers[k] : '') + '.</span>' +
+              '<span class="mline">______</span><span class="mtext">' + H.sanitize(pr.html, resolve) + '</span></div>');
+          });
+          out.push('</div></div>');
+          return;
+        }
+
         out.push('<div class="q"><div class="qtext"><span class="qnum">' + item.number + '.</span>' +
-          '<div class="qbody">' + H.sanitize(q.html, resolve) + '</div></div>');
+          '<div class="qbody">' + H.sanitize(bodyHtmlFor(q), resolve) + '</div></div>');
 
         if (item.order && item.order.length && TB.CHOICE_TYPES.indexOf(q.type) !== -1) {
           out.push('<div class="choices">');
@@ -283,10 +322,12 @@
       relSeq++;
       media.push({ name: name, bytes: b64ToUint8(m[2]) });
       rels.push({ id: rId, target: 'media/' + name });
-      var dims = sizeCache[url] || { w: 380, h: 260 };
-      var maxW = 430;
-      var scale = dims.w > maxW ? maxW / dims.w : 1;
-      var placed = { rId: rId, w: dims.w * scale, h: dims.h * scale };
+      var dims = (ref && ref.w && ref.h) ? { w: ref.w, h: ref.h } : (sizeCache[url] || { w: 380, h: 260 });
+      var maxW = 430, maxH = 330;
+      var scale = 1;
+      if (dims.w > maxW) scale = maxW / dims.w;
+      if (dims.h * scale > maxH) scale = maxH / dims.h;
+      var placed = { rId: rId, w: Math.round(dims.w * scale), h: Math.round(dims.h * scale) };
       imgByUrl[url] = placed;
       return placed;
     }
@@ -298,11 +339,13 @@
       sec.items.forEach(function (item) {
         allHtml.push(item.q.html || '');
         (item.q.answersHtml || []).forEach(function (a) { allHtml.push(a); });
+        (item.q.matchPrompts || []).forEach(function (pr) { allHtml.push(pr.html || ''); });
       });
     });
     for (var ai = 0; ai < allHtml.length; ai++) {
       var refs = H.imageRefs(allHtml[ai]);
       for (var ri = 0; ri < refs.length; ri++) {
+        if (refs[ri].w && refs[ri].h) continue;         // size already declared on the tag
         var u = TB.resolveImage(refs[ri]);
         if (u && u.indexOf('data:') === 0 && !sizeCache[u]) sizeCache[u] = await measure(u);
       }
@@ -324,9 +367,46 @@
           continue;
         }
 
+        if (q.type === 'MATCH') {
+          var range = (item.numbers && item.numbers.length)
+            ? item.numbers[0] + '–' + item.numbers[item.numbers.length - 1] : String(item.number);
+          var stem = H.toOoxml(q.html, { indent: 0, addImage: addImage });
+          if (stem.length && stem[0].indexOf('<w:p>') === 0) {
+            stem[0] = stem[0].replace('</w:pPr>', '</w:pPr>' + runXml(range + '.  ', { bold: true }));
+          } else {
+            stem.unshift(paraXml(runXml(range + '.', { bold: true }), { after: 20 }));
+          }
+          stem.forEach(function (blk) { body.push(blk); });
+
+          // Lettered choice bank, then a numbered blank per prompt
+          item.order.forEach(function (ci, pos) {
+            var cb = H.toOoxml(q.answersHtml[ci] || '', { indent: 700, addImage: addImage });
+            if (cb.length && cb[0].indexOf('<w:p>') === 0) {
+              cb[0] = cb[0].replace('</w:pPr>', '</w:pPr>' + runXml(TB.LETTERS[pos] + '.  ', { bold: true }));
+            } else {
+              cb.unshift(paraXml(runXml(TB.LETTERS[pos] + '.', { bold: true }), { indent: 700, after: 20 }));
+            }
+            cb.forEach(function (blk) { body.push(blk); });
+          });
+          body.push(paraXml('', { after: 60 }));
+          (item.promptOrder || []).forEach(function (pIdx, k) {
+            var pr = q.matchPrompts[pIdx];
+            var pb = H.toOoxml(pr.html || '', { indent: 480, addImage: addImage });
+            var lead = runXml((item.numbers ? item.numbers[k] : '') + '.  ______  ', { bold: true });
+            if (pb.length && pb[0].indexOf('<w:p>') === 0) {
+              pb[0] = pb[0].replace('</w:pPr>', '</w:pPr>' + lead);
+            } else {
+              pb.unshift(paraXml(lead, { indent: 480, after: 20 }));
+            }
+            pb.forEach(function (blk) { body.push(blk); });
+          });
+          body.push(paraXml('', { after: 80 }));
+          continue;
+        }
+
         // Question number sits in its own paragraph run ahead of the body, then
         // the body's own blocks (which may include tables) follow.
-        var bodyBlocks = H.toOoxml(q.html, { indent: 0, addImage: addImage });
+        var bodyBlocks = H.toOoxml(bodyHtmlFor(q), { indent: 0, addImage: addImage });
         if (bodyBlocks.length && bodyBlocks[0].indexOf('<w:p>') === 0) {
           // splice the number into the first paragraph so it reads "1.  Question"
           bodyBlocks[0] = bodyBlocks[0].replace('</w:pPr>', '</w:pPr>' + runXml(item.number + '.  ', { bold: true }));

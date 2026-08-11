@@ -32,11 +32,12 @@
     fill_in_multiple_blanks_question: 'FIB',
     fill_in_the_blank_question: 'SA',
     essay_question: 'ESSAY',
-    text_only_question: 'TEXT'
+    text_only_question: 'TEXT',
+    matching_question: 'MATCH'
   };
-  // Types that can't work on paper: hot spot needs clicking, ordering and
-  // matching need drag targets. Counted and reported rather than half-rendered.
-  var UNSUPPORTED = { hot_spot_question: 1, ordering_question: 1, matching_question: 1, file_upload_question: 1, calculated_question: 1 };
+  // Hot spot needs clicking on an image and ordering needs drag targets, so
+  // neither survives the trip to paper. Counted and reported, never half-drawn.
+  var UNSUPPORTED = { hot_spot_question: 1, ordering_question: 1, file_upload_question: 1, calculated_question: 1 };
 
   TB.TYPE_MAP = TYPE_MAP;
 
@@ -77,10 +78,11 @@
 
     if (type === 'TEXT') return { q: q };
 
-    // Choices, keyed by their Canvas ident (a UUID in real exports)
+    // Choices, keyed by their Canvas ident (a UUID in real exports).
+    // MATCH collects its own choices below, since they repeat per prompt.
     var labelMap = {}, idx = 0;
     var labelRe = /<response_label\s+ident="([^"]+)"[^>]*>[\s\S]*?<mattext[^>]*>([\s\S]*?)<\/mattext>/g, lm;
-    while ((lm = labelRe.exec(presXml)) !== null) {
+    while (type !== 'MATCH' && (lm = labelRe.exec(presXml)) !== null) {
       var html = decodeEntities(lm[2]);
       q.answersHtml.push(html);
       q.answers.push(null);            // filled lazily by TB.plainAnswers()
@@ -130,6 +132,38 @@
         var v = decodeEntities(vm2[1].trim());
         if (v && !seen[v]) { seen[v] = 1; q.answers.push(v); }
       }
+    } else if (type === 'MATCH') {
+      // Canvas stores one <response_lid> per left-hand prompt; each repeats the
+      // same right-hand choice list. On paper that becomes a lettered choice
+      // bank plus one numbered blank per prompt.
+      q.matchPrompts = [];
+      var choiceIdent = [], choiceSeen = {};
+      var lidRe = /<response_lid\s+ident="([^"]+)"[^>]*>([\s\S]*?)<\/response_lid>/g, lidm;
+      while ((lidm = lidRe.exec(presXml)) !== null) {
+        var lidIdent = lidm[1], inner = lidm[2];
+        var promptHtml = decodeEntities(firstMatch(inner, /<material[^>]*>\s*<mattext[^>]*>([\s\S]*?)<\/mattext>/));
+        q.matchPrompts.push({ ident: lidIdent, html: promptHtml, correct: -1 });
+        var clRe = /<response_label\s+ident="([^"]+)"[^>]*>[\s\S]*?<mattext[^>]*>([\s\S]*?)<\/mattext>/g, clm;
+        while ((clm = clRe.exec(inner)) !== null) {
+          if (choiceSeen[clm[1]]) continue;
+          choiceSeen[clm[1]] = true;
+          choiceIdent.push(clm[1]);
+          q.answersHtml.push(decodeEntities(clm[2]));
+          q.answers.push(null);
+        }
+      }
+      // resprocessing maps each prompt ident to the ident of its correct choice
+      var mRe = /<varequal\s+respident="([^"]+)"[^>]*>([^<]+)<\/varequal>/g, mm2;
+      var pairMap = {};
+      while ((mm2 = mRe.exec(respXml)) !== null) pairMap[mm2[1]] = mm2[2].trim();
+      q.matchPrompts.forEach(function (pr) {
+        var target = pairMap[pr.ident];
+        var ci = choiceIdent.indexOf(target);
+        if (ci !== -1) pr.correct = ci;
+      });
+      // A prompt with no resolvable answer is dropped rather than printed blank
+      q.matchPrompts = q.matchPrompts.filter(function (pr) { return pr.correct >= 0 && (pr.html || '').trim(); });
+      if (!q.matchPrompts.length) return { skipped: 'matching_question' };
     } else if (type === 'FIB') {
       // Each blank is a <response_lid>/<response_str> whose ident names the blank
       var blanks = [];
@@ -147,7 +181,11 @@
       }
       blanks.forEach(function (b) {
         var clean = b.replace(/^response_/, '');
-        q.fib_blanks[clean] = { correct: ansMap[b] || ansMap[clean] || '', blooket_distractors: [] };
+        // Batch Genie's own QTI export prefixes blank names with q<number>_ to
+        // keep them unique across a quiz; strip that so keys read plainly.
+        var pretty = clean.replace(/^q\d+_/, '') || clean;
+        q.fib_blanks[pretty] = { correct: ansMap[b] || ansMap[clean] || '', blooket_distractors: [] };
+        if (pretty !== clean) q.html = q.html.split('[' + clean + ']').join('[' + pretty + ']');
       });
     }
 
@@ -305,7 +343,31 @@
   TB.loadImageRef = async function (q, ref) {
     var bank = bankOf(q);
     if (!bank) return '';
-    if (ref.kind === 'remote') return ref.url;      // equation images load from the web
+
+    if (ref.kind === 'remote') {
+      // Many question images point at absolute Canvas URLs that need a login,
+      // but the export ships the same file. Match it by name so the picture
+      // still appears — in Word especially, where a URL is useless.
+      var guess = '';
+      if (ref.alt && /\.(png|jpe?g|gif|bmp|webp)$/i.test(ref.alt)) guess = ref.alt;
+      if (!guess) {
+        var tail = String(ref.url || '').split('?')[0].split('/').pop() || '';
+        if (/\.(png|jpe?g|gif|bmp|webp)$/i.test(tail)) guess = tail;
+      }
+      if (guess) {
+        var gk = guess.toLowerCase();
+        if (bank.imageCache[gk]) return bank.imageCache[gk];
+        var gpath = bank.imageIndex[gk] || bank.imageIndex['uploaded media/' + gk] || bank.imageIndex['assessment_questions/' + gk];
+        if (gpath && bank.zip && bank.zip.files[gpath]) {
+          var gext = gpath.split('.').pop().toLowerCase();
+          var gb64 = await bank.zip.files[gpath].async('base64');
+          var gurl = 'data:' + (MIME[gext] || 'image/png') + ';base64,' + gb64;
+          bank.imageCache[gk] = gurl;
+          return gurl;
+        }
+      }
+      return ref.url;                                // fall back to the live URL
+    }
 
     var key = String(ref.path || '').toLowerCase();
     if (bank.imageCache[key]) return bank.imageCache[key];

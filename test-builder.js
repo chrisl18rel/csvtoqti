@@ -29,7 +29,7 @@
 
   var TYPE_LABELS = {
     MC: 'Multiple Choice', MR: 'Multiple Response', TF: 'True/False',
-    NUM: 'Numerical', SA: 'Short Answer', FIB: 'Fill in Blanks', ESSAY: 'Essay', TEXT: 'Text Block'
+    NUM: 'Numerical', SA: 'Short Answer', FIB: 'Fill in Blanks', ESSAY: 'Essay', TEXT: 'Text Block', MATCH: 'Matching'
   };
 
   function el(id) { return document.getElementById(id); }
@@ -105,6 +105,7 @@
       '      <option value="SA">Short Answer</option>',
       '      <option value="FIB">Fill in Blanks</option>',
       '      <option value="ESSAY">Essay</option>',
+      '      <option value="MATCH">Matching</option>',
       '      <option value="TEXT">Text Block</option>',
       '    </select>',
       '    <input type="text" id="tbSearch" placeholder="Search question text…" style="width:auto;flex:1;min-width:160px;margin-bottom:0;padding:7px 12px;font-size:13px">',
@@ -432,6 +433,12 @@
         var isC = (q.correct || []).indexOf(i) !== -1;
         return '<div class="tbPrev" style="margin:2px 0;display:flex;gap:6px;' + (isC ? 'color:#065f46;font-weight:700' : 'color:#444') + '">' +
           '<span>' + (isC ? '✓' : '&nbsp;&nbsp;') + '</span><span>' + TBHtml.sanitize(a, resolve) + '</span></div>';
+      }).join('') + '</div>';
+    } else if (q.type === 'MATCH') {
+      html += '<div style="margin-left:12px">' + (q.matchPrompts || []).map(function (pr, i) {
+        return '<div style="margin:2px 0;color:#065f46"><strong>' + (i + 1) + '.</strong> ' +
+          esc(TBHtml.toPlain(pr.html)) + ' <span style="color:#888">→</span> <strong>' +
+          esc(TBHtml.toPlain(q.answersHtml[pr.correct] || '')) + '</strong></div>';
       }).join('') + '</div>';
     } else if (q.type !== 'TEXT') {
       var ans = TB.answerFor(q, []);

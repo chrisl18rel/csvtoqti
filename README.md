@@ -1,4 +1,4 @@
-# Batch Genie — Quiz Tools for Canvas (v7.3)
+# Batch Genie — Quiz Tools for Canvas (v7.2)
 
 Two tools on one page, switched with the tabs at the top:
 
@@ -13,7 +13,9 @@ Built for the ExamView workflow: load banks → pick questions → split the tes
 
 **1. Question Banks.** Load your Canvas **course export (`.imscc`)** — Course Settings → Export Course Content → Course. That is the file that holds your question banks; a "quiz export" .zip usually comes out empty. Canvas quiz .zip exports and saved Batch Genie sessions also work. Every bank and quiz inside becomes a separate entry you can pull from, labelled BANK or QUIZ, with a filter box for finding the ones you want. A full course export scans in a couple of seconds; images stay compressed inside the archive and are pulled out only for the questions you actually use.
 
-Question types that can't work on paper — hot spot, matching, and ordering — are left out and reported, rather than printed as something broken.
+**Matching questions** are supported and print the classic paper way: the shared choice bank is lettered A, B, C…, and each pair gets its own numbered blank. A five-pair matching question therefore takes five question numbers, so every pair lands on the answer key — and on a ZipGrade sheet, since each answer is a single letter.
+
+Hot spot and ordering questions are left out and reported, rather than printed as something broken: hot spot needs clicking an image and ordering needs drag targets.
 
 **2. Select Questions.** Browse everything in the active banks, filtered by type or a text search. Click **View** on any question to see it with its correct answer marked. Check the ones you want, or use **Select All Shown** or **🎲 Pick Random…** to grab N at random. A running counter shows how many are selected.
 
@@ -26,11 +28,13 @@ Question types that can't work on paper — hot spot, matching, and ordering —
 - `*.docx` — a real Word file per version, editable before printing. Images and chemistry Unicode carry over.
 - `*_print.html` — open and press Cmd+P to print or save as PDF.
 - `*_answer_keys.csv` — every version, one row per question, with section, type, points, and source bank.
-- `*_zipgrade_key.csv` — all versions in one file, ready to import into ZipGrade for bubble-sheet scanning.
+- `*_zipgrade_key.csv` — all versions in one file, ready to import into ZipGrade for bubble-sheet scanning. Multiple choice, true/false, multiple response, and matching pairs are all included.
 
 True/False choices are never scrambled (a reversed "False / True" reads as a mistake). Written-response questions get blank answer lines sized to the type and are left off the ZipGrade key, since a scanner can't grade them — the plain CSV still lists their answers for hand grading. Text-only blocks from your banks print as unnumbered instructions. Set **Points each** on a section to override whatever the bank says, which matters because Canvas banks often store no point value.
 
-One limit worth knowing: LaTeX equation images (the ones Canvas hosts at instructure.com) render normally in the print/PDF copy, but in the Word file they are replaced with the equivalent symbol where one exists — an arrow, Δ, and so on. If a question depends on a complex equation image, print that version rather than using the .docx.
+Fill-in-the-blank placeholders print as ruled blanks rather than the raw `[blank_name]` markers Canvas stores (which are often UUIDs).
+
+Images use the size Canvas recorded on the question, so they print at their intended proportions. Many bank questions point at images by absolute Canvas URL, which would need a login; those are matched back to the copy inside your export by filename, so they still appear in the Word file. LaTeX equation images (hosted at instructure.com) render normally in the print/PDF copy, but in Word they fall back to the equivalent symbol where one exists — an arrow, Δ, and so on. If a question hinges on a complex equation image, print that version rather than using the .docx.
 
 ---
 
@@ -80,7 +84,7 @@ Point values: if the source document states point values, the AI uses them; othe
 
 ## Files
 
-`index.html` — page shell, tabs, and the AI extractor. `test-html.js` — HTML preservation (tables, sub/sup, images). `test-banks.js` — question-bank loading. `test-compose.js` — version building and scrambling. `test-export.js` — Word/print/CSV output. `test-builder.js` — the Paper Test Builder interface. `api-key-vault.gs` — the Google Apps Script key vault (deployed separately; contains no secrets, which live in Script Properties).
+`index.html` — page shell, tabs, and the AI extractor. `test-banks.js` — question-bank loading. `test-compose.js` — version building and scrambling. `test-export.js` — Word/print/CSV output. `test-builder.js` — the Paper Test Builder interface. `api-key-vault.gs` — the Google Apps Script key vault (deployed separately; contains no secrets, which live in Script Properties).
 
 **Deploying vault changes:** editing and saving the Apps Script does *not* update the live web app. You must go to Deploy → Manage deployments → edit the existing deployment (pencil icon) → Version: **New version** → Deploy. Editing the existing deployment keeps the same URL, so `VAULT_URL` in `index.html` stays valid; "New deployment" would create a different URL and break the link. Note also that the vault project may live under a different Google account than your default — check which account you're signed in as if changes appear to have no effect.
 

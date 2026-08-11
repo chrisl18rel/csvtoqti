@@ -88,6 +88,12 @@
   function choiceOrder(q, rng, scramble) {
     if (!q.answers || !q.answers.length) return [];
     if (TB.plainAnswers) TB.plainAnswers(q);
+    // Matching keeps its choice bank in a stable order but may shuffle it as a
+    // whole; prompts are shuffled separately in buildItem().
+    if (q.type === 'MATCH') {
+      var all = q.answersHtml.map(function (_, i) { return i; });
+      return scramble ? shuffled(all, rng) : all;
+    }
     var idx = [];
     for (var i = 0; i < q.answers.length; i++) {
       if (String(q.answers[i] || '').trim()) idx.push(i);
@@ -110,6 +116,9 @@
       return Object.keys(q.fib_blanks || {})
         .map(function (bid) { return bid + ': ' + ((q.fib_blanks[bid] || {}).correct || ''); })
         .join('; ');
+    }
+    if (q.type === 'MATCH') {
+      return (q.matchPrompts || []).map(function (pr, i) { return (i + 1) + '→' + TB.LETTERS[order.indexOf(pr.correct)]; }).join(' ');
     }
     if (q.type === 'NUM') return String((q.answers && q.answers[0]) || q.suggested_answer || '');
     if (q.type === 'SA')  return (q.answers || []).filter(Boolean).join(' / ');
@@ -167,7 +176,12 @@
           if (!q) return null;
           var order = choiceOrder(q, rng, blueprint.scrambleChoices);
           var pts = (s.pointsEach !== '' && s.pointsEach != null) ? parseFloat(s.pointsEach) : (parseFloat(q.points) || 1);
-          return { q: q, order: order, answer: answerFor(q, order), points: pts };
+          var item = { q: q, order: order, answer: answerFor(q, order), points: pts };
+          if (q.type === 'MATCH') {
+            var pi = (q.matchPrompts || []).map(function (_, i) { return i; });
+            item.promptOrder = blueprint.scrambleQuestions ? shuffled(pi, rng) : pi;
+          }
+          return item;
         }).filter(Boolean);
         return { name: s.name || ('Section ' + (si + 1)), items: qs };
       });
@@ -186,6 +200,13 @@
         sec.items.forEach(function (item) {
           // Text blocks are instructions, not questions — they aren't numbered
           if (item.q.type === 'TEXT') { item.number = null; return; }
+          if (item.q.type === 'MATCH') {
+            // Each pair gets its own number, the way ExamView prints matching
+            item.number = n + 1;
+            item.numbers = (item.promptOrder || []).map(function () { return ++n; });
+            totalPoints += (item.points != null ? item.points : 1) * item.numbers.length;
+            return;
+          }
           item.number = ++n;
           totalPoints += (item.points != null ? item.points : (parseFloat(item.q.points) || 0));
         });
@@ -210,6 +231,20 @@
     version.sections.forEach(function (sec) {
       sec.items.forEach(function (item) {
         if (item.q.type === 'TEXT') return;
+        if (item.q.type === 'MATCH') {
+          (item.promptOrder || []).forEach(function (pIdx, k) {
+            var pr = item.q.matchPrompts[pIdx];
+            rows.push({
+              number: item.numbers ? item.numbers[k] : null,
+              type: 'MATCH',
+              answer: TB.LETTERS[item.order.indexOf(pr.correct)] || '',
+              points: item.points != null ? item.points : 1,
+              bankName: item.q.bankName || '',
+              section: sec.name || ''
+            });
+          });
+          return;
+        }
         rows.push({
           number: item.number,
           type: item.q.type,
@@ -224,6 +259,7 @@
   };
 
   // Questions a bubble sheet can actually grade
-  TB.isBubbleable = function (type) { return CHOICE_TYPES.indexOf(type) !== -1; };
+  // Matching pairs are single-letter answers, so a scanner can grade them too
+  TB.isBubbleable = function (type) { return CHOICE_TYPES.indexOf(type) !== -1 || type === 'MATCH'; };
 
 })(window);

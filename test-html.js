@@ -90,12 +90,27 @@
     return s.split('?')[0];
   };
 
+  H.refFor = function (img) {
+    var src = img.getAttribute('src') || '';
+    var w = parseInt(img.getAttribute('width'), 10);
+    var h = parseInt(img.getAttribute('height'), 10);
+    var ref = H.isFilebase(src)
+      ? { kind: 'local', path: H.filebasePath(src), alt: img.getAttribute('alt') || '' }
+      : (/^https?:/i.test(src) ? { kind: 'remote', url: src, alt: img.getAttribute('alt') || '' } : null);
+    if (ref) {
+      // Canvas writes the intended display size on the tag; trust it over
+      // measuring, which is both slower and wrong for stretched images.
+      if (isFinite(w) && w > 0) ref.w = w;
+      if (isFinite(h) && h > 0) ref.h = h;
+    }
+    return ref;
+  };
+
   H.imageRefs = function (htmlStr) {
     var out = [];
     H.parse(htmlStr).querySelectorAll('img').forEach(function (img) {
-      var src = img.getAttribute('src') || '';
-      if (H.isFilebase(src)) out.push({ kind: 'local', path: H.filebasePath(src), alt: img.getAttribute('alt') || '' });
-      else if (/^https?:/i.test(src)) out.push({ kind: 'remote', url: src, alt: img.getAttribute('alt') || '' });
+      var ref = H.refFor(img);
+      if (ref) out.push(ref);
     });
     return out;
   };
@@ -152,6 +167,8 @@
       }
       var src = node.tagName === 'IMG' ? node.getAttribute('src') : null;
       var alt = node.tagName === 'IMG' ? (node.getAttribute('alt') || '') : '';
+      var keepW = node.tagName === 'IMG' ? parseInt(node.getAttribute('width'), 10) : NaN;
+      var keepH = node.tagName === 'IMG' ? parseInt(node.getAttribute('height'), 10) : NaN;
 
       Array.prototype.slice.call(node.attributes).forEach(function (attr) {
         node.removeAttribute(attr.name);
@@ -160,6 +177,8 @@
       if (node.tagName === 'IMG') {
         var ref = H.isFilebase(src) ? { kind: 'local', path: H.filebasePath(src), alt: alt }
                                     : { kind: 'remote', url: src, alt: alt };
+        if (isFinite(keepW) && keepW > 0) ref.w = keepW;
+        if (isFinite(keepH) && keepH > 0) ref.h = keepH;
         var resolved = resolveImg ? resolveImg(ref) : (ref.kind === 'remote' ? ref.url : '');
         if (!resolved) {
           var txt = H.latexToText(alt);
@@ -260,11 +279,9 @@
         if (tag === 'HR') { flush(); blocks.push('<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:color="999999"/></w:pBdr></w:pPr></w:p>'); continue; }
 
         if (tag === 'IMG') {
-          var src = n.getAttribute('src') || '';
           var alt = n.getAttribute('alt') || '';
-          var ref = H.isFilebase(src) ? { kind: 'local', path: H.filebasePath(src), alt: alt }
-                                      : { kind: 'remote', url: src, alt: alt };
-          var placed = ctx.addImage ? ctx.addImage(ref) : null;
+          var ref = H.refFor(n);
+          var placed = (ref && ctx.addImage) ? ctx.addImage(ref) : null;
           if (placed) current.push(imageRun(placed.rId, placed.w, placed.h));
           else {
             var txt = H.latexToText(alt);
