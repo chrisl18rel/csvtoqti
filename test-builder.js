@@ -745,6 +745,24 @@
 
   // Start with one section so the page never looks empty
   TB.init = function () {
+    // Fail loudly if a module didn't load, rather than throwing something
+    // cryptic the first time a bank file is opened.
+    var missing = [];
+    if (!global.TBHtml) missing.push('test-html.js');
+    if (!TB.loadBankFiles) missing.push('test-banks.js');
+    if (!TB.buildVersions) missing.push('test-compose.js');
+    if (!TB.printHtml) missing.push('test-export.js');
+    if (!global.JSZip) missing.push('JSZip (CDN)');
+    if (missing.length) {
+      var root0 = el('tbRoot');
+      if (root0) {
+        root0.innerHTML = '<div class="card"><div class="notice notice-error">' +
+          '<strong>The Paper Test Builder could not start.</strong><br>These files did not load: ' +
+          missing.join(', ') + '.<br>Reload the page — if it keeps happening, the site may be mid-update.' +
+          '</div></div>';
+      }
+      return;
+    }
     TB.render();
     if (!sections.length) addSection({ name: 'Part I — Multiple Choice', count: 10, types: ['MC'] });
   };
