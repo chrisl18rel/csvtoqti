@@ -1,4 +1,4 @@
-# Batch Genie — Quiz Tools for Canvas (v7.2)
+# Batch Genie — Quiz Tools for Canvas (v7.8)
 
 Two tools on one page, switched with the tabs at the top:
 
@@ -90,4 +90,4 @@ Point values: if the source document states point values, the AI uses them; othe
 
 ---
 
-Created by Chris Leatherwood — Tyler, TX · v7.1 · © 2025–2026
+Created by Chris Leatherwood — Tyler, TX · v7.8 · © 2025–2026
