@@ -134,20 +134,9 @@
       '  <div id="tbQuestionList" style="max-height:520px;overflow-y:auto;border:1.5px solid #e8e8f5;border-radius:12px;padding:8px;background:#fafafe"></div>',
       '</div>',
 
-      // 3 — SECTIONS
+      // 3 — VERSIONS (name the test before splitting it up)
       '<div class="card">',
-      '  <h2><span class="step-dot" style="background:#d97706">3</span>Test Sections</h2>',
-      '  <p style="font-size:13px;color:#555;margin:0 0 12px">A section is one part of your test — for example <em>Part I, questions 1–20</em>. Say how many questions it holds, and they are drawn at random from the ones you selected in step 2. Most tests need just one or two sections.</p>',
-      '  <div id="tbSectionList"></div>',
-      '  <div class="btnrow" style="margin-top:10px">',
-      '    <button class="btn btn-violet btn-sm" id="tbAddSection">+ Add Section</button>',
-      '    <span id="tbSectionSummary" style="font-size:13px;color:#555;align-self:center"></span>',
-      '  </div>',
-      '</div>',
-
-      // 4 — VERSIONS
-      '<div class="card">',
-      '  <h2><span class="step-dot" style="background:#8F37EB">4</span>Versions &amp; Scrambling</h2>',
+      '  <h2><span class="step-dot" style="background:#8F37EB">3</span>Versions &amp; Scrambling</h2>',
       '  <div class="row2">',
       '    <div>',
       '      <label for="tbTitle">Test Title</label>',
@@ -176,8 +165,21 @@
       '    <label><input type="checkbox" id="tbScrambleC" checked> Scramble answer choices within each question</label>',
       '    <label><input type="checkbox" id="tbScrambleAll"> Scramble <strong>all</strong> questions across the whole test <span style="color:#888;font-size:12px">(ignores section headings)</span></label>',
       '    <hr class="soft" style="margin:4px 0">',
+      '    <label><input type="checkbox" id="tbShowHeadings" checked> Print section headings on the test <span style="color:#888;font-size:12px">(off = questions run straight through with no part titles or dividers)</span></label>',
+      '    <hr class="soft" style="margin:4px 0">',
       '    <label><input type="radio" name="tbSameQ" id="tbSameYes" checked style="width:16px;height:16px;accent-color:#6465F1"> Every version uses the <strong>same questions</strong> — only the order changes</label>',
       '    <label><input type="radio" name="tbSameQ" id="tbSameNo" style="width:16px;height:16px;accent-color:#6465F1"> Draw a <strong>different random set</strong> of questions for each version</label>',
+      '  </div>',
+      '</div>',
+
+      // 4 — SECTIONS
+      '<div class="card">',
+      '  <h2><span class="step-dot" style="background:#d97706">4</span>Test Sections</h2>',
+      '  <p style="font-size:13px;color:#555;margin:0 0 12px">A section is one part of your test — for example <em>Part I, questions 1–20</em>. Say how many questions it holds, and they are drawn at random from the ones you selected in step 2. Most tests need just one or two sections. If you turned off section headings in step 3, these still control what gets drawn — they are simply not printed as parts.</p>',
+      '  <div id="tbSectionList"></div>',
+      '  <div class="btnrow" style="margin-top:10px">',
+      '    <button class="btn btn-violet btn-sm" id="tbAddSection">+ Add Section</button>',
+      '    <span id="tbSectionSummary" style="font-size:13px;color:#555;align-self:center"></span>',
       '  </div>',
       '</div>',
 
@@ -869,6 +871,7 @@
       scrambleQuestions: el('tbScrambleQ').checked,
       scrambleChoices: el('tbScrambleC').checked,
       scrambleWholeTest: el('tbScrambleAll').checked,
+      showSectionHeadings: el('tbShowHeadings') ? el('tbShowHeadings').checked : true,
       sections: sections.map(function (s) {
         return { name: s.name, count: s.count, pool: sectionPool(s), required: s.required.slice(), pointsEach: s.pointsEach };
       })

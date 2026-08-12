@@ -215,10 +215,24 @@
         ansMap[respId] = text;
       }
 
+      // Canvas names blanks with UUIDs, which are unreadable in the question
+      // text and in the editor. Rename those to blank1, blank2… in the order
+      // they appear. Names a teacher actually chose (short and meaningful) are
+      // left alone.
+      var ugly = function (name) { return name.length > 20 || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(name); };
+      var seenOrder = [], oRe = /\[([^\]\s]{1,64})\]/g, om;
+      while ((om = oRe.exec(q.html || '')) !== null) {
+        if (seenOrder.indexOf(om[1]) === -1) seenOrder.push(om[1]);
+      }
+      var renameCount = 0;
       blankOrder.forEach(function (b) {
         var clean = b.replace(/^response_/, '');
         // Batch Genie's own QTI export prefixes blank names with q<number>_
         var pretty = clean.replace(/^q\d+_/, '') || clean;
+        if (ugly(pretty)) {
+          var pos = seenOrder.indexOf(clean);
+          pretty = 'blank' + (pos >= 0 ? pos + 1 : ++renameCount);
+        }
         q.fib_blanks[pretty] = { correct: ansMap[b] || ansMap[clean] || '', blooket_distractors: [] };
         if (pretty !== clean) q.html = q.html.split('[' + clean + ']').join('[' + pretty + ']');
       });

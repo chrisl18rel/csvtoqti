@@ -120,6 +120,13 @@
         rows + '<button class="btn btn-gray btn-sm" id="edAddAns">+ Add Choice</button>';
     }
 
+    // Fill-in-the-blank markers read as ruled blanks in the preview, the way
+    // they will print
+    function previewHtml() {
+      var body = (draft.type === 'FIB' && TB.fibBlanksToRules) ? TB.fibBlanksToRules(draft.html) : draft.html;
+      return H.sanitize(body, TB.resolveImage);
+    }
+
     function draw() {
       var typeOpts = EDITABLE_TYPES.map(function (t) {
         return '<option value="' + t + '" ' + (draft.type === t ? 'selected' : '') + '>' + t + '</option>';
@@ -141,7 +148,7 @@
 
         '<div style="background:#f4f4fc;border:1px solid #e0e0f0;border-radius:10px;padding:10px 12px;margin-bottom:14px">' +
         '<div style="font-size:11px;font-weight:700;color:#666;margin-bottom:5px">PREVIEW</div>' +
-        '<div id="edPreview" style="font-size:13px">' + H.sanitize(draft.html, TB.resolveImage) + '</div></div>' +
+        '<div id="edPreview" style="font-size:13px">' + previewHtml() + '</div></div>' +
 
         '<div id="edAnswers">' + answersEditor() + '</div>' +
         '</div>' +
@@ -212,7 +219,7 @@
       var body = box.querySelector('#edBody');
       body.addEventListener('input', function () {
         draft.html = this.value;
-        box.querySelector('#edPreview').innerHTML = H.sanitize(draft.html, TB.resolveImage);
+        box.querySelector('#edPreview').innerHTML = previewHtml();
       });
       // Adding [markers] should surface new blanks straight away
       body.addEventListener('change', function () {

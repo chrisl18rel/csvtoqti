@@ -174,8 +174,10 @@
 
     var resolve = TB.resolveImage;
 
+    var showHeadings = blueprint.showSectionHeadings !== false;
+
     version.sections.forEach(function (sec) {
-      if (sec.name) out.push('<p class="secHead">' + esc(sec.name) + '</p>');
+      if (sec.name && showHeadings) out.push('<p class="secHead">' + esc(sec.name) + '</p>');
       sec.items.forEach(function (item) {
         var q = item.q;
 
@@ -353,7 +355,7 @@
 
     for (var si = 0; si < version.sections.length; si++) {
       var sec = version.sections[si];
-      if (sec.name) {
+      if (sec.name && blueprint.showSectionHeadings !== false) {
         body.push(paraXml(runXml(sec.name, { bold: true, size: 24 }),
           { before: 200, after: 80, topBorder: true, keepNext: true }));
       }
