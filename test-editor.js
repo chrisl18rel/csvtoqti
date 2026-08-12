@@ -120,11 +120,27 @@
         rows + '<button class="btn btn-gray btn-sm" id="edAddAns">+ Add Choice</button>';
     }
 
-    // Fill-in-the-blank markers read as ruled blanks in the preview, the way
-    // they will print
-    function previewHtml() {
-      var body = (draft.type === 'FIB' && TB.fibBlanksToRules) ? TB.fibBlanksToRules(draft.html) : draft.html;
-      return H.sanitize(body, TB.resolveImage);
+    // What the editable surface shows: the question exactly as Canvas has it,
+    // with images resolved. Blank markers stay visible as chips so they can be
+    // moved, removed or added.
+    function editableHtml() {
+      var html = H.sanitize(draft.html, TB.resolveImage);
+      if (draft.type === 'FIB') {
+        html = html.replace(/\[([A-Za-z0-9_\-]{1,64})\]/g,
+          '<span class="tbBlankChip">[$1]</span>');
+      }
+      return html;
+    }
+
+    // Read the surface back, turning blank chips into plain markers again
+    function readEditable() {
+      var node = box.querySelector('#edBody');
+      if (!node) return draft.html;
+      var clone = node.cloneNode(true);
+      clone.querySelectorAll('.tbBlankChip').forEach(function (chip) {
+        chip.replaceWith(document.createTextNode(chip.textContent));
+      });
+      return H.sanitize(clone.innerHTML, function (ref) { return TB.resolveImage(ref); });
     }
 
     function draw() {
@@ -143,12 +159,24 @@
         '<div><label style="font-size:12px">Points</label><input type="number" id="edPoints" min="0" step="0.5" value="' + (draft.points || 1) + '"></div>' +
         '</div>' +
 
-        '<label style="font-size:12px">Question text <span style="font-weight:400;color:#888">(plain text is fine; existing formatting and tables are kept)</span></label>' +
-        '<textarea id="edBody" style="min-height:90px;font-family:\'DM Mono\',monospace;font-size:12.5px">' + esc2(draft.html) + '</textarea>' +
-
-        '<div style="background:#f4f4fc;border:1px solid #e0e0f0;border-radius:10px;padding:10px 12px;margin-bottom:14px">' +
-        '<div style="font-size:11px;font-weight:700;color:#666;margin-bottom:5px">PREVIEW</div>' +
-        '<div id="edPreview" style="font-size:13px">' + previewHtml() + '</div></div>' +
+        '<label style="font-size:12px">Question text <span style="font-weight:400;color:#888">(edit it just like a document — tables, bold and images are kept exactly as they are in Canvas)</span></label>' +
+        '<div class="tbToolbar">' +
+        '<button type="button" data-cmd="bold" title="Bold"><strong>B</strong></button>' +
+        '<button type="button" data-cmd="italic" title="Italic"><em>I</em></button>' +
+        '<button type="button" data-cmd="underline" title="Underline"><u>U</u></button>' +
+        '<button type="button" data-cmd="superscript" title="Superscript">x²</button>' +
+        '<button type="button" data-cmd="subscript" title="Subscript">x₂</button>' +
+        '<button type="button" data-cmd="removeFormat" title="Clear formatting">✕ format</button>' +
+        '<span style="width:10px"></span>' +
+        '<button type="button" id="edInsertTable" title="Insert a table">▦ Table</button>' +
+        (draft.type === 'FIB' ? '<button type="button" id="edInsertBlank" title="Insert a blank">＿ Blank</button>' : '') +
+        '<button type="button" id="edToggleSource" title="Show the underlying HTML">&lt;/&gt;</button>' +
+        '</div>' +
+        '<div id="edBody" class="tbWysiwyg" contenteditable="true">' + editableHtml() + '</div>' +
+        '<textarea id="edSource" style="display:none;min-height:120px;font-family:\'DM Mono\',monospace;font-size:12.5px;margin-top:8px"></textarea>' +
+        '<div style="font-size:11px;color:#888;margin:4px 0 14px">' +
+        (draft.type === 'FIB' ? 'Each <span class="tbBlankChip">[blank1]</span> marks where a student writes. They print as ruled lines.' : 'What you see here is what prints.') +
+        '</div>' +
 
         '<div id="edAnswers">' + answersEditor() + '</div>' +
         '</div>' +
@@ -164,8 +192,9 @@
     }
 
     function readTextInputs() {
-      var b = box.querySelector('#edBody');
-      if (b) draft.html = b.value;
+      var srcBox = box.querySelector('#edSource');
+      if (srcBox && srcBox.style.display !== 'none') draft.html = srcBox.value;
+      else draft.html = readEditable();
       var p = box.querySelector('#edPoints');
       if (p) draft.points = parseFloat(p.value) || 1;
 
@@ -217,20 +246,77 @@
       });
 
       var body = box.querySelector('#edBody');
-      body.addEventListener('input', function () {
-        draft.html = this.value;
-        box.querySelector('#edPreview').innerHTML = previewHtml();
+      var srcBox = box.querySelector('#edSource');
+
+      box.querySelectorAll('.tbToolbar [data-cmd]').forEach(function (b2) {
+        b2.addEventListener('mousedown', function (e) { e.preventDefault(); });   // keep the selection
+        b2.addEventListener('click', function () {
+          body.focus();
+          document.execCommand(this.dataset.cmd, false, null);
+        });
       });
-      // Adding [markers] should surface new blanks straight away
-      body.addEventListener('change', function () {
+
+      box.querySelector('#edInsertTable').addEventListener('click', function () {
+        askTableSize(function (rows, cols) {
+          var html = '<table border="1"><tbody>';
+          for (var r = 0; r < rows; r++) {
+            html += '<tr>';
+            for (var c = 0; c < cols; c++) html += (r === 0 ? '<th>&nbsp;</th>' : '<td>&nbsp;</td>');
+            html += '</tr>';
+          }
+          html += '</tbody></table><p>&nbsp;</p>';
+          body.focus();
+          document.execCommand('insertHTML', false, html);
+        });
+      });
+
+      var insBlank = box.querySelector('#edInsertBlank');
+      if (insBlank) insBlank.addEventListener('click', function () {
+        // Next free blank name, so it never collides with an existing one
+        var n = 1;
+        while (draft.fib_blanks['blank' + n] || body.innerHTML.indexOf('[blank' + n + ']') !== -1) n++;
+        body.focus();
+        document.execCommand('insertHTML', false, '<span class="tbBlankChip">[blank' + n + ']</span>&nbsp;');
+        syncBlanks();
+      });
+
+      box.querySelector('#edToggleSource').addEventListener('click', function () {
+        if (srcBox.style.display === 'none') {
+          srcBox.value = readEditable();
+          srcBox.style.display = '';
+          body.style.display = 'none';
+        } else {
+          draft.html = srcBox.value;
+          srcBox.style.display = 'none';
+          body.style.display = '';
+          body.innerHTML = editableHtml();
+          syncBlanks();
+        }
+      });
+
+      // Adding or deleting blanks in the text keeps the answer list in step
+      function syncBlanks() {
         if (draft.type !== 'FIB') return;
+        var html = readEditable();
         var found = [], re = /\[([^\]\s]{1,64})\]/g, m;
-        while ((m = re.exec(draft.html)) !== null) if (found.indexOf(m[1]) === -1) found.push(m[1]);
+        while ((m = re.exec(html)) !== null) if (found.indexOf(m[1]) === -1) found.push(m[1]);
+        var same = found.length === Object.keys(draft.fib_blanks).length &&
+          found.every(function (b3) { return draft.fib_blanks[b3]; });
+        if (same) return;
         var next = {};
-        found.forEach(function (b) { next[b] = draft.fib_blanks[b] || { correct: '', blooket_distractors: [] }; });
+        found.forEach(function (b3) { next[b3] = draft.fib_blanks[b3] || { correct: '', blooket_distractors: [] }; });
         draft.fib_blanks = next;
-        readTextInputs();
+        draft.html = html;
         draw();
+      }
+      body.addEventListener('blur', syncBlanks);
+
+      // Pasting from Word or Canvas brings a lot of junk; keep only what we render
+      body.addEventListener('paste', function (e) {
+        var html = (e.clipboardData || global.clipboardData).getData('text/html');
+        var text = (e.clipboardData || global.clipboardData).getData('text/plain');
+        e.preventDefault();
+        document.execCommand('insertHTML', false, html ? H.sanitize(html, TB.resolveImage) : esc2(text));
       });
 
       box.querySelectorAll('.edCorrect').forEach(function (c) {
@@ -405,6 +491,32 @@
 
     draw();
   };
+
+  // Small rows/columns prompt for the Insert Table button
+  function askTableSize(onOk) {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(32,29,82,.5);z-index:3400';
+    var box = document.createElement('div');
+    box.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(32,29,82,.3);z-index:3401;overflow:hidden';
+    box.innerHTML =
+      '<div style="background:linear-gradient(135deg,#201D52,#3a2875);padding:14px 18px;color:#fff;font-weight:700;font-size:14px">Insert a table</div>' +
+      '<div style="padding:16px 18px">' +
+      '<div class="row2"><div><label style="font-size:12px">Rows</label><input type="number" id="tblRows" value="3" min="1" max="30"></div>' +
+      '<div><label style="font-size:12px">Columns</label><input type="number" id="tblCols" value="3" min="1" max="12"></div></div>' +
+      '<div style="font-size:11px;color:#888;margin-bottom:10px">The first row is a header row.</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+      '<button class="btn btn-gray btn-sm" id="tblCancel">Cancel</button>' +
+      '<button class="btn btn-indigo btn-sm" id="tblOk">Insert</button></div></div>';
+    document.body.appendChild(ov); document.body.appendChild(box);
+    function close() { ov.remove(); box.remove(); }
+    ov.onclick = close;
+    box.querySelector('#tblCancel').onclick = close;
+    box.querySelector('#tblOk').onclick = function () {
+      var r = Math.max(1, Math.min(30, parseInt(box.querySelector('#tblRows').value, 10) || 3));
+      var c = Math.max(1, Math.min(12, parseInt(box.querySelector('#tblCols').value, 10) || 3));
+      close(); onOk(r, c);
+    };
+  }
 
   // ── Brand new question, written from scratch ────────────────────────────────
   TB.newQuestion = function (bankId, onDone) {

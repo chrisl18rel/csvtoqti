@@ -85,10 +85,10 @@
   // Shared rendering helpers
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // Blank writing space for open-response questions
+  // Blank writing space for open-response questions. Fill-in-the-blank needs
+  // none: its blanks are already inline, often inside a table.
   function blankLinesFor(type) {
     if (type === 'ESSAY') return 6;
-    if (type === 'FIB')   return 2;
     if (type === 'SA' || type === 'NUM') return 1;
     return 0;
   }

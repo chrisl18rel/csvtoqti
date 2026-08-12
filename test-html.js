@@ -161,9 +161,13 @@
         node.replaceWith.apply(node, Array.prototype.slice.call(node.childNodes));
         return;
       }
-      var keepStyle = '';
+      var keepStyle = '', keepSpan = '', keepRowSpan = '', keepAlign = '';
       if (node.tagName === 'TD' || node.tagName === 'TH' || node.tagName === 'TABLE') {
         keepStyle = node.getAttribute('style') || '';
+        keepSpan = node.getAttribute('colspan') || '';
+        keepRowSpan = node.getAttribute('rowspan') || '';
+        var alignM = keepStyle.match(/text-align:\s*(left|right|center)/i);
+        keepAlign = alignM ? alignM[1].toLowerCase() : (node.getAttribute('align') || '');
       }
       var src = node.tagName === 'IMG' ? node.getAttribute('src') : null;
       var alt = node.tagName === 'IMG' ? (node.getAttribute('alt') || '') : '';
@@ -188,10 +192,16 @@
         node.setAttribute('src', resolved);
         if (alt) node.setAttribute('alt', alt);
         node.setAttribute('style', 'max-width:100%;max-height:2.4in');
-      } else if (keepStyle) {
-        // keep only harmless width hints on tables
+      } else if (node.tagName === 'TD' || node.tagName === 'TH' || node.tagName === 'TABLE') {
+        // Merged cells and alignment are part of how the question reads, so
+        // they survive; decorative styling does not.
+        if (keepSpan) node.setAttribute('colspan', keepSpan);
+        if (keepRowSpan) node.setAttribute('rowspan', keepRowSpan);
+        var bits = [];
         var w = keepStyle.match(/width:\s*[\d.]+%/i);
-        if (w) node.setAttribute('style', w[0]);
+        if (w) bits.push(w[0]);
+        if (keepAlign) bits.push('text-align:' + keepAlign);
+        if (bits.length) node.setAttribute('style', bits.join(';'));
       }
     });
 
@@ -256,6 +266,7 @@
       opts = opts || {};
       blocks.push('<w:p><w:pPr>' +
         (indent ? '<w:ind w:left="' + indent + '"/>' : '') +
+        (ctx.align ? '<w:jc w:val="' + (ctx.align === 'center' ? 'center' : ctx.align) + '"/>' : '') +
         '<w:spacing w:after="' + (opts.after == null ? 40 : opts.after) + '" w:line="240" w:lineRule="auto"/>' +
         (opts.bullet ? '<w:ind w:left="' + (indent + 360) + '"/>' : '') +
         '</w:pPr>' + current.join('') + '</w:p>');
@@ -322,9 +333,16 @@
       trs.forEach(function (tr) {
         var cells = [];
         Array.prototype.slice.call(tr.children).forEach(function (td) {
-          var inner = H.toOoxml(td.innerHTML, { indent: 0, addImage: ctx2.addImage });
+          var span = parseInt(td.getAttribute('colspan'), 10);
+          var rspan = parseInt(td.getAttribute('rowspan'), 10);
+          var st = td.getAttribute('style') || '';
+          var al = (st.match(/text-align:\s*(left|right|center)/i) || [])[1];
+          var inner = H.toOoxml(td.innerHTML, { indent: 0, addImage: ctx2.addImage, align: al });
           if (!inner.length) inner = ['<w:p/>'];
-          cells.push('<w:tc><w:tcPr><w:tcW w:w="' + colW + '" w:type="dxa"/></w:tcPr>' + inner.join('') + '</w:tc>');
+          var props = '<w:tcW w:w="' + (colW * (isFinite(span) && span > 1 ? span : 1)) + '" w:type="dxa"/>' +
+            (isFinite(span) && span > 1 ? '<w:gridSpan w:val="' + span + '"/>' : '') +
+            (isFinite(rspan) && rspan > 1 ? '<w:vMerge w:val="restart"/>' : '');
+          cells.push('<w:tc><w:tcPr>' + props + '</w:tcPr>' + inner.join('') + '</w:tc>');
         });
         if (cells.length) rows.push('<w:tr>' + cells.join('') + '</w:tr>');
       });

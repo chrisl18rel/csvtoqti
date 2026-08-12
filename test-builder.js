@@ -517,7 +517,7 @@
         var plain = TBHtml.toPlain(a);
         if (!plain) return '';
         var isC = (q.correct || []).indexOf(i) !== -1;
-        return '<div class="tbPrev" style="margin:2px 0;display:flex;gap:6px;' + (isC ? 'color:#065f46;font-weight:700' : 'color:#444') + '">' +
+        return '<div class="tbPrev" style="margin:3px 0;display:flex;gap:6px;align-items:flex-start;' + (isC ? 'color:#065f46;font-weight:700' : 'color:#444') + '">' +
           '<span>' + (isC ? '✓' : '&nbsp;&nbsp;') + '</span><span>' + TBHtml.sanitize(a, resolve) + '</span></div>';
       }).join('') + '</div>';
     } else if (q.type === 'MATCH') {
