@@ -41,6 +41,53 @@
 
   TB.TYPE_MAP = TYPE_MAP;
 
+  // Canvas names each blank with a UUID, which is unreadable in the question
+  // text and in the editor. Rename them blank1, blank2… in the order they
+  // appear in the *body*, because the body is what the teacher sees and edits.
+  // Answers are matched by name where the names line up and by position where
+  // they don't, so a mismatch between the markers and the scoring rules can't
+  // leave the text and the answer list disagreeing.
+  function uglyName(name) {
+    return !name || name.length > 20 || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(name);
+  }
+  TB.uglyBlankName = uglyName;
+
+  TB.normalizeFibNames = function (q) {
+    if (!q || q.type !== 'FIB') return q;
+    var html = q.html || '';
+    var markers = [], re = /\[([^\]\s]{1,64})\]/g, m;
+    while ((m = re.exec(html)) !== null) {
+      if (markers.indexOf(m[1]) === -1) markers.push(m[1]);
+    }
+    var oldKeys = Object.keys(q.fib_blanks || {});
+    if (!markers.length) return q;
+
+    // Strip any prefix our own exporter added, then decide name-by-name
+    var byName = {};
+    oldKeys.forEach(function (k) { byName[k.replace(/^q\d+_/, '')] = q.fib_blanks[k]; });
+
+    var next = {};
+    markers.forEach(function (marker, i) {
+      // Batch Genie's own QTI export prefixes blank names with q<number>_ to
+      // keep them unique across a quiz; that prefix is noise when read back.
+      var pretty = marker.replace(/^q\d+_/, '') || marker;
+      if (uglyName(pretty)) pretty = 'blank' + (i + 1);
+      // Prefer the answer stored under this marker's own name; fall back to
+      // whatever sat in the same position in the scoring rules.
+      var entry = byName[marker] || byName[marker.replace(/^q\d+_/, '')] ||
+                  q.fib_blanks[oldKeys[i]] || { correct: '', blooket_distractors: [] };
+      next[pretty] = entry;
+      if (pretty !== marker) {
+        html = html.split('[' + marker + ']').join('[' + pretty + ']');
+      }
+    });
+
+    q.fib_blanks = next;
+    q.html = html;
+    delete q._plain;
+    return q;
+  };
+
   TB.nextUid    = function () { return 'q' + (qSeq++); };
   TB.nextBankId = function () { return 'bank_' + (bankSeq++); };
 
@@ -215,27 +262,11 @@
         ansMap[respId] = text;
       }
 
-      // Canvas names blanks with UUIDs, which are unreadable in the question
-      // text and in the editor. Rename those to blank1, blank2… in the order
-      // they appear. Names a teacher actually chose (short and meaningful) are
-      // left alone.
-      var ugly = function (name) { return name.length > 20 || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(name); };
-      var seenOrder = [], oRe = /\[([^\]\s]{1,64})\]/g, om;
-      while ((om = oRe.exec(q.html || '')) !== null) {
-        if (seenOrder.indexOf(om[1]) === -1) seenOrder.push(om[1]);
-      }
-      var renameCount = 0;
       blankOrder.forEach(function (b) {
         var clean = b.replace(/^response_/, '');
-        // Batch Genie's own QTI export prefixes blank names with q<number>_
-        var pretty = clean.replace(/^q\d+_/, '') || clean;
-        if (ugly(pretty)) {
-          var pos = seenOrder.indexOf(clean);
-          pretty = 'blank' + (pos >= 0 ? pos + 1 : ++renameCount);
-        }
-        q.fib_blanks[pretty] = { correct: ansMap[b] || ansMap[clean] || '', blooket_distractors: [] };
-        if (pretty !== clean) q.html = q.html.split('[' + clean + ']').join('[' + pretty + ']');
+        q.fib_blanks[clean] = { correct: ansMap[b] || ansMap[clean] || '', blooket_distractors: [] };
       });
+      TB.normalizeFibNames(q);
     }
 
     return { q: q };

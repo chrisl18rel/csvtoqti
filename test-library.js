@@ -204,6 +204,8 @@
       if (q.matchPrompts && q.matchPrompts.length) {
         copy.matchPrompts = q.matchPrompts.map(function (p) { return { html: p.html, correct: p.correct }; });
       }
+      // Banks saved before blank renaming existed still carry UUID markers
+      if (copy.type === 'FIB' && TB.normalizeFibNames) TB.normalizeFibNames(copy);
       return copy;
     });
 

@@ -40,6 +40,9 @@
   TB.openEditor = function (uid, onDone) {
     var orig = TB.findQuestion(uid);
     if (!orig) return;
+    // Last line of defence: whatever the question's history, its blanks get
+    // readable names before anyone sees them.
+    if (orig.type === 'FIB' && TB.normalizeFibNames) TB.normalizeFibNames(orig);
     var draft = cloneQ(orig);
 
     var ov = document.createElement('div');
