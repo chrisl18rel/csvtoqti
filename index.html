@@ -241,7 +241,14 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
           </label>
           <span style="font-size:12px;color:#666;margin-left:28px;display:block;margin-top:2px">When checked, AI must provide General, Correct, and Incorrect feedback for every question</span>
         </div>
-        <!-- Edugence: course TEKS for SE tagging (handled in edugence-export.js) -->
+        <!-- Edugence: extraction mode + course TEKS for SE tagging (handled in edugence-export.js) -->
+        <div>
+          <label style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input type="checkbox" id="edugenceMode" style="width:18px;height:18px;accent-color:#6465F1;margin:0">
+            Build for Edugence
+          </label>
+          <span style="font-size:12px;color:#666;margin-left:28px;display:block;margin-top:2px">Multiple choice and numeric only. Multi-part questions are split into separate questions, true/false and select-all become 4-choice MC, and figures are described in words since Edugence can't take images.</span>
+        </div>
         <div>
           <label style="font-weight:600;font-size:13px;display:block">Course TEKS <span style="font-weight:400;color:#888">(optional — for Edugence SE tagging)</span></label>
           <span style="font-size:12px;color:#666;display:block;margin:2px 0 8px">Upload the TEA TEKS PDF (or .txt) for your course once. Every extracted question then gets a TEK code for Edugence.</span>
