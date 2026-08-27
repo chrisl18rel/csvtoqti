@@ -114,7 +114,7 @@ Rules:
 EDUGENCE MODE — THESE RULES OVERRIDE EVERY QUESTION-TYPE RULE ABOVE, INCLUDING THE FIB, SA, AND MR RULES:
 - The ONLY allowed types are "MC" and "NUM". Never output MR, TF, SA, FIB, ESSAY, or FILE.
 - MC = exactly 4 answer choices, exactly 1 correct. Choices must be distinct and plausible.
-- NUM = one numerical answer (sig-fig rules still apply; fill answers, suggested_answer, and blooket_distractors as before).
+- NUM = one numerical answer (sig-fig rules still apply; fill answers, suggested_answer, and blooket_distractors as before) AND set "edugence_answer" to the single value a student bubbles on a scantron: digits with an optional decimal point and minus sign only — no units, no commas, no fractions, no ranges, no scientific notation (e.g. "32", "0.045", "-273.15"). If the correct answer would need scientific notation or is otherwise not griddable, REWRITE the question so the answer is griddable (ask for the value "in units of 10²³", change the units, ask for the exponent or the coefficient, or make it a 4-choice MC).
 - MULTI-PART QUESTIONS (two or more answers, e.g. "find the pH and the pOH", "give the protons, electrons, neutrons, and mass number"): SPLIT them into separate questions, one per required answer. Each new question must repeat the shared context in its own body so it stands alone, e.g. "An ion has 8 protons and 8 neutrons and a charge of −2. How many electrons does it have?" → NUM. Never use [blank] markers.
 - TRUE/FALSE: rewrite as a 4-choice MC (e.g. turn the statement into a question with 4 options, or offer 4 statements of which exactly one is true).
 - SELECT-ALL-THAT-APPLY: rewrite so exactly one choice is correct, or split into several MC questions.
@@ -173,9 +173,9 @@ EDUGENCE MODE — THESE RULES OVERRIDE EVERY QUESTION-TYPE RULE ABOVE, INCLUDING
     setStatus('<span class="spinner"></span> Converting ' + questions.length + ' question(s) for Edugence…', 'loading');
     const SYS = `You rewrite quiz questions so they fit Edugence, which accepts ONLY 4-choice single-answer multiple choice ("MC") and single-value numeric ("NUM") questions.
 Return ONLY valid JSON — no markdown fences, no explanation:
-{ "questions": [ { "source_id": 12, "type": "MC|NUM", "body": "", "answers": ["A","B","C","D"], "correct": [0], "suggested_answer": "", "blooket_distractors": [], "tek": "" } ] }
+{ "questions": [ { "source_id": 12, "type": "MC|NUM", "body": "", "answers": ["A","B","C","D"], "correct": [0], "suggested_answer": "", "blooket_distractors": [], "edugence_answer": "", "tek": "" } ] }
 - MC: "answers" = exactly 4 distinct choices, "correct" = [0-based index of the one correct choice], "suggested_answer" = text of the correct choice, "blooket_distractors" = [].
-- NUM: "answers" = ["[min, max]"] tight range around the sig-fig-correct value (E-notation for scientific notation), "correct" = [], "suggested_answer" = the value with units and a sig-fig note, "blooket_distractors" = 3 plausible wrong values.
+- NUM: "answers" = ["[min, max]"] tight range around the sig-fig-correct value (E-notation for scientific notation), "correct" = [], "suggested_answer" = the value with units and a sig-fig note, "blooket_distractors" = 3 plausible wrong values, "edugence_answer" = the single griddable value (see the NUM rule below). For MC set "edugence_answer": "".
 - "source_id" = the id of the question it came from. Keep the original order; a split question produces consecutive entries with the same source_id.
 - Keep "tek" from the source unless you are given a TEKS list, in which case set the best-matching code from that list (exactly as written) or "" if none fits.
 - Questions that are already MC with 4 choices or NUM with no image: return them unchanged apart from any needed cleanup.
@@ -202,6 +202,7 @@ Return ONLY valid JSON — no markdown fences, no explanation:
           body: q.body, answers: q.type === 'MC' ? (q.answers || []).slice(0, 4) : [String((q.answers || [''])[0] || '')],
           correct: q.type === 'MC' ? (q.correct || []).slice(0, 1) : [], fib_blanks: {}, image_ref: '',
           suggested_answer: q.suggested_answer || '', blooket_distractors: q.blooket_distractors || [], tek,
+          edugence_answer: q.type === 'NUM' ? String(q.edugence_answer || '').trim() : '',
           feedback: { general: '', correct: '', incorrect: '' }
         });
       });
@@ -230,6 +231,7 @@ Return ONLY valid JSON — no markdown fences, no explanation:
     return { value: '', min: '', max: '' };
   }
 
+  const GRIDDABLE = /^-?\d+(\.\d+)?$/;
   const SUPS = '⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺', NORMS = '0123456789-+';
   function numericValue(q) {
     // "6.022 × 10²³ mol⁻¹ (4 sig figs)" → "6.022E23"
@@ -257,10 +259,11 @@ Return ONLY valid JSON — no markdown fences, no explanation:
       base.type = 'MC';
       base.correct = 'ABCDE'[pos];
     } else if (q.type === 'NUM') {
-      const n = numericValue(q);
       base.type = 'NUM';
-      base.num_value = n.value; base.num_min = n.min; base.num_max = n.max;
-      if (!n.value && !n.min) return { skip: 'no numeric answer' };
+      const value = String(q.edugence_answer || '').trim() || numericValue(q).value;
+      if (!value) return { skip: 'no numeric answer' };
+      base.num_value = value;
+      if (!GRIDDABLE.test(value)) notes.push('answer "' + value + '" is not griddable — fix the Edugence Answer box');
     } else {
       return { skip: q.type + ' is not supported in Edugence export' };
     }
@@ -295,10 +298,12 @@ Return ONLY valid JSON — no markdown fences, no explanation:
     document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
 
     const untagged = questions.filter(q => !q.tek).length;
+    const notGriddable = questions.map((q, i) => q.type === 'NUM' && !GRIDDABLE.test(String(q.edugence_answer || '').trim() || numericValue(q).value) ? 'Q' + (i + 1) : '').filter(Boolean);
     let msg = '✅ Edugence CSV downloaded — ' + (num - 1) + ' question(s).';
     if (untagged) msg += ' ' + untagged + ' without a TEK (the builder will skip the SE step for those).';
+    if (notGriddable.length) msg += ' Not griddable, fix the Edugence Answer box: ' + notGriddable.join(', ') + '.';
     if (skipped.length) msg += ' Skipped: ' + skipped.join('; ') + '.';
-    setStatus(msg, skipped.length || untagged ? 'error' : 'done');
+    setStatus(msg, skipped.length || untagged || notGriddable.length ? 'error' : 'done');
     document.getElementById('statusMsg').classList.add('show');
   }
 
