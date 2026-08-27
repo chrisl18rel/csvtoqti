@@ -241,6 +241,17 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
           </label>
           <span style="font-size:12px;color:#666;margin-left:28px;display:block;margin-top:2px">When checked, AI must provide General, Correct, and Incorrect feedback for every question</span>
         </div>
+        <!-- Edugence: course TEKS for SE tagging (handled in edugence-export.js) -->
+        <div>
+          <label style="font-weight:600;font-size:13px;display:block">Course TEKS <span style="font-weight:400;color:#888">(optional — for Edugence SE tagging)</span></label>
+          <span style="font-size:12px;color:#666;display:block;margin:2px 0 8px">Upload the TEA TEKS PDF (or .txt) for your course once. Every extracted question then gets a TEK code for Edugence.</span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="file" id="teksFileInput" accept=".pdf,.txt,application/pdf,text/plain" style="font-size:12px">
+            <button class="btn btn-gray btn-sm" id="teksClearBtn" style="display:none">Clear TEKS</button>
+          </div>
+          <div id="teksStatus" style="font-size:12px;color:#555;margin-top:6px"></div>
+          <datalist id="teksList"></datalist>
+        </div>
       </div>
     </div>
     <div class="btnrow">
@@ -313,6 +324,7 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
       <button class="btn btn-navy btn-sm" id="expandAllBtn">Expand All</button>
       <button class="btn btn-green btn-sm" id="updatePtsBtn">↻ Update Point Values</button>
       <button class="btn btn-red btn-sm" id="removeFeedbackBtn">🗑 Remove All Feedback</button>
+      <button class="btn btn-navy btn-sm" id="tagTeksBtn" title="Tag every question with its best-matching TEK (needs TEKS loaded in Step 2)">🏷 Tag TEKS with AI</button>
       <span class="q-count-badge" id="qCountBadge">0 questions</span>
     </div>
     <div id="questionList"></div>
@@ -329,12 +341,14 @@ hr.soft{border:none;height:1px;background:#e8e8f5;margin:14px 0}
       <button class="btn btn-green" id="downloadBtn">⬇ Download QTI for Canvas</button>
       <button class="btn btn-violet" id="saveWorkbenchBtn">💾 Save Session (.zip)</button>
       <button class="btn" id="blooketBtn" style="background:#f97316">🟠 Export Blooket CSV</button>
+      <button class="btn btn-navy" id="edugenceBtn">🟣 Export Edugence CSV</button>
     </div>
     <p style="font-size:12px;color:#888;margin:8px 0 0">
       <strong>Download QTI for Canvas</strong> — imports into Canvas but cannot be reloaded here. <a href="https://drive.google.com/file/d/1-QqvQv6HfaA9JCfVPBL0PcEVtoOn8K9l/view?usp=drive_link" target="_blank" style="color:#6465F1;font-weight:600">📄 How to Import into Canvas</a> &nbsp;<a href="https://youtu.be/3uRKbp2DqsY" target="_blank" style="color:#6465F1;font-weight:600">▶ Video Walkthrough</a><br>
       <strong>Save Session</strong> — saves your full workbench so you can resume editing later.<br>
       <strong>Export Blooket CSV</strong> — all questions converted to MC format for Blooket import.
-      <span style="color:#d97706">⚠ Images cannot be included in Blooket CSV — add them manually inside Blooket after import.</span>
+      <span style="color:#d97706">⚠ Images cannot be included in Blooket CSV — add them manually inside Blooket after import.</span><br>
+      <strong>Export Edugence CSV</strong> — MC, TF, and NUM questions with TEK codes, for the Edugence Builder bookmarklet. Other types are skipped and listed.
     </p>
   </div>
 
@@ -700,6 +714,7 @@ Schema:
       "suggested_answer": "",
       "image_ref": "",
       "fib_blanks": {},
+      "tek": "",
       "feedback": { "general": "", "correct": "", "incorrect": "" }
     }
   ]
@@ -805,7 +820,7 @@ Examples of correct formatting:
 - Bicarbonate: HCO₃⁻
 - Acetate: C₂H₃O₂⁻
 
-Apply this to every formula, ion, charge, and equation in every question body, answer choice, and feedback field.`;
+Apply this to every formula, ion, charge, and equation in every question body, answer choice, and feedback field.${window.EdugenceExport ? EdugenceExport.promptAddendum() : ''}`;
 
   const pdfImgKeys = content.kind === 'pdf' ? Object.keys(content.images || {}) : [];
   const pdfImgNote = pdfImgKeys.length
@@ -896,6 +911,7 @@ Apply this to every formula, ion, charge, and equation in every question body, a
       image_ref: q.image_ref || '',
       suggested_answer: q.suggested_answer || '',
       blooket_distractors: q.blooket_distractors || [],
+      tek: q.tek || '',
       feedback: { general: q.feedback?.general||'', correct: q.feedback?.correct||'', incorrect: q.feedback?.incorrect||'' }
     }));
 
@@ -933,6 +949,7 @@ function buildCard(q, idx) {
     <div class="q-header">
       <span class="q-num">Q${idx+1}</span>
       <span class="type-pill tp-${q.type}">${q.type}</span>
+      ${q.tek ? `<span class="type-pill" style="background:#201D52;color:#fff" title="TEKS (Edugence SE)">${esc(q.tek)}</span>` : ''}
       <span class="q-preview">${esc(q.body.substring(0,90))}${q.body.length>90?'…':''}</span>
       <div class="q-actions">
         <button class="btn btn-indigo btn-sm" onclick="toggleEdit(${q.id})">✏ Edit</button>
@@ -1013,6 +1030,8 @@ function buildEditForm(q) {
         <input type="text" value="${q.points}" oninput="getQ(${q.id}).points=parseFloat(this.value)||1">
       </div>
     </div>
+    <label>TEKS <span style="font-weight:400;color:#888;font-size:12px">(Edugence SE code, e.g. C.6A — start typing to pick from the loaded list)</span></label>
+    <input type="text" list="teksList" value="${esc(q.tek||'')}" placeholder="Leave blank to skip the SE step in Edugence" oninput="getQ(${q.id}).tek=this.value.trim()">
     <label>Question Text</label>
     <textarea style="min-height:60px" oninput="getQ(${q.id}).body=this.value" onchange="syncFibBlanks(${q.id})">${esc(q.body)}</textarea>
     ${answersHtml}
@@ -2715,6 +2734,7 @@ document.getElementById('blooketBtn').addEventListener('click', () => {
 <script src="test-export.js?v=7.9"></script>
 <script src="test-library.js?v=7.9"></script>
 <script src="test-editor.js?v=7.9"></script>
+<script src="edugence-export.js?v=7.9"></script>
 <script src="test-builder.js?v=7.9"></script>
 
 <!-- Styled in-app alert modal (replaces browser alert()) -->
