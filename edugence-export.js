@@ -163,6 +163,56 @@ EDUGENCE MODE — THESE RULES OVERRIDE EVERY QUESTION-TYPE RULE ABOVE, INCLUDING
     }
   }
 
+  // ─── Convert already-loaded questions to Edugence-ready MC / NUM ───────────
+  async function convertForEdugence() {
+    if (!questions.length) { showAppAlert('Nothing to convert', 'Extract or add questions first.'); return; }
+    if (!apiKey()) { showAppAlert('AI is locked', 'Click the ⚙ settings gear and enter your password to unlock AI.'); return; }
+    const already = questions.every(q => (q.type === 'MC' || q.type === 'NUM') && !q.image_ref);
+    if (already) { setStatus('✅ Every question is already MC or NUM with no image — nothing to convert.', 'done'); return; }
+
+    setStatus('<span class="spinner"></span> Converting ' + questions.length + ' question(s) for Edugence…', 'loading');
+    const SYS = `You rewrite quiz questions so they fit Edugence, which accepts ONLY 4-choice single-answer multiple choice ("MC") and single-value numeric ("NUM") questions.
+Return ONLY valid JSON — no markdown fences, no explanation:
+{ "questions": [ { "source_id": 12, "type": "MC|NUM", "body": "", "answers": ["A","B","C","D"], "correct": [0], "suggested_answer": "", "blooket_distractors": [], "tek": "" } ] }
+- MC: "answers" = exactly 4 distinct choices, "correct" = [0-based index of the one correct choice], "suggested_answer" = text of the correct choice, "blooket_distractors" = [].
+- NUM: "answers" = ["[min, max]"] tight range around the sig-fig-correct value (E-notation for scientific notation), "correct" = [], "suggested_answer" = the value with units and a sig-fig note, "blooket_distractors" = 3 plausible wrong values.
+- "source_id" = the id of the question it came from. Keep the original order; a split question produces consecutive entries with the same source_id.
+- Keep "tek" from the source unless you are given a TEKS list, in which case set the best-matching code from that list (exactly as written) or "" if none fits.
+- Questions that are already MC with 4 choices or NUM with no image: return them unchanged apart from any needed cleanup.
+- Use proper Unicode subscripts/superscripts for formulas (H₂O, SO₄²⁻, 6.02 × 10²³).` + EDUGENCE_RULES.replace('THESE RULES OVERRIDE EVERY QUESTION-TYPE RULE ABOVE, INCLUDING THE FIB, SA, AND MR RULES:', 'RULES:');
+    const teksList = teks && teks.items && teks.items.length ? '\n\nTEKS LIST:\n' + teks.items.map(t => t.code + ' — ' + t.text).join('\n') : '';
+    const payload = questions.map(q => ({
+      id: q.id, type: q.type, body: q.body, answers: q.answers || [], correct: q.correct || [],
+      fib_blanks: q.type === 'FIB' ? Object.fromEntries(Object.entries(q.fib_blanks || {}).map(([k, v]) => [k, v.correct || ''])) : undefined,
+      suggested_answer: q.suggested_answer || '', has_image: !!q.image_ref, tek: q.tek || ''
+    }));
+    try {
+      const data = await askAI(SYS, 'QUESTIONS:\n' + JSON.stringify(payload, null, 1) + teksList, 32000);
+      const out = (data.questions || []).filter(q => q && q.body && (q.type === 'MC' || q.type === 'NUM'));
+      if (!out.length) throw new Error('The AI returned no usable questions.');
+      const validTek = new Set(teks && teks.items ? teks.items.map(t => t.code) : []);
+      const byId = Object.fromEntries(questions.map(q => [q.id, q]));
+      const pts = Math.round((100 / out.length) * 100) / 100;
+      const before = questions.length;
+      questions = out.map(q => {
+        const src = byId[Number(q.source_id)] || {};
+        const tek = validTek.size ? (validTek.has(String(q.tek)) ? String(q.tek) : (src.tek || '')) : (String(q.tek || '') || src.tek || '');
+        return sanitizeQuestion({
+          id: nextId++, type: q.type, title: (src.title || '').replace(/^NEEDS IMAGE\s*/i, ''), points: pts,
+          body: q.body, answers: q.type === 'MC' ? (q.answers || []).slice(0, 4) : [String((q.answers || [''])[0] || '')],
+          correct: q.type === 'MC' ? (q.correct || []).slice(0, 1) : [], fib_blanks: {}, image_ref: '',
+          suggested_answer: q.suggested_answer || '', blooket_distractors: q.blooket_distractors || [], tek,
+          feedback: { general: '', correct: '', incorrect: '' }
+        });
+      });
+      document.getElementById('defaultPts').value = pts;
+      renderAllQuestions(); updateQCount(); saveSession();
+      setStatus('✅ Converted for Edugence: ' + before + ' → ' + questions.length + ' question(s), all MC or NUM. Points reset to ' + pts + ' each. Review every question before exporting.', 'done');
+    } catch (e) {
+      setStatus('⚠ Conversion failed: ' + e.message, 'error');
+    }
+  }
+
   // ─── Numeric helpers ───────────────────────────────────────────────────────
   function parseNumRule(rule) {
     const s = String(rule || '').trim();
@@ -260,6 +310,8 @@ EDUGENCE MODE — THESE RULES OVERRIDE EVERY QUESTION-TYPE RULE ABOVE, INCLUDING
     if (clearBtn) clearBtn.addEventListener('click', () => { saveTeks(null); setStatus('TEKS list cleared.', 'done'); });
     const tagBtn = document.getElementById('tagTeksBtn');
     if (tagBtn) tagBtn.addEventListener('click', tagQuestionsWithAI);
+    const convertBtn = document.getElementById('convertEdugenceBtn');
+    if (convertBtn) convertBtn.addEventListener('click', convertForEdugence);
     const exportBtn = document.getElementById('edugenceBtn');
     if (exportBtn) exportBtn.addEventListener('click', exportCSV);
     renderTeksStatus();
@@ -267,5 +319,5 @@ EDUGENCE MODE — THESE RULES OVERRIDE EVERY QUESTION-TYPE RULE ABOVE, INCLUDING
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
-  return { promptAddendum, edugenceModeOn, tagQuestionsWithAI, exportCSV, getTeks: () => teks };
+  return { promptAddendum, edugenceModeOn, tagQuestionsWithAI, convertForEdugence, exportCSV, getTeks: () => teks };
 })();
