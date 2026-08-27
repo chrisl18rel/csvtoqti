@@ -920,6 +920,7 @@ Apply this to every formula, ion, charge, and equation in every question body, a
       suggested_answer: q.suggested_answer || '',
       blooket_distractors: q.blooket_distractors || [],
       tek: q.tek || '',
+      edugence_answer: q.edugence_answer || '',
       feedback: { general: q.feedback?.general||'', correct: q.feedback?.correct||'', incorrect: q.feedback?.incorrect||'' }
     }));
 
@@ -987,7 +988,9 @@ function buildEditForm(q) {
             <button class="btn btn-green btn-sm" onclick="updateNumBounds(${q.id})">Update Bounds</button>
           </div>
           <div id="numPreview-${q.id}" style="font-size:12px;color:#1e40af;margin-top:6px;display:none"></div>
-        </div>`;
+        </div>
+        <label style="margin-top:10px">Edugence Answer <span style="font-weight:400;color:#888;font-size:12px">(one griddable value — digits, optional decimal and minus sign, no units or scientific notation)</span></label>
+        <input type="text" id="eduAns-${q.id}" placeholder="e.g. 32  or  0.045  or  -273.15" value="${esc(q.edugence_answer||'')}" oninput="getQ(${q.id}).edugence_answer=this.value.trim()">`;
     } else if (q.type === 'SA') {
       answersHtml = `
         <label>Acceptable Answers — one per line</label>
