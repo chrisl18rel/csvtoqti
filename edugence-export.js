@@ -109,10 +109,32 @@ Rules:
   }
 
   // ─── Prompt addendum used by doExtract() ───────────────────────────────────
+  const EDUGENCE_RULES = `
+
+EDUGENCE MODE — THESE RULES OVERRIDE EVERY QUESTION-TYPE RULE ABOVE, INCLUDING THE FIB, SA, AND MR RULES:
+- The ONLY allowed types are "MC" and "NUM". Never output MR, TF, SA, FIB, ESSAY, or FILE.
+- MC = exactly 4 answer choices, exactly 1 correct. Choices must be distinct and plausible.
+- NUM = one numerical answer (sig-fig rules still apply; fill answers, suggested_answer, and blooket_distractors as before).
+- MULTI-PART QUESTIONS (two or more answers, e.g. "find the pH and the pOH", "give the protons, electrons, neutrons, and mass number"): SPLIT them into separate questions, one per required answer. Each new question must repeat the shared context in its own body so it stands alone, e.g. "An ion has 8 protons and 8 neutrons and a charge of −2. How many electrons does it have?" → NUM. Never use [blank] markers.
+- TRUE/FALSE: rewrite as a 4-choice MC (e.g. turn the statement into a question with 4 options, or offer 4 statements of which exactly one is true).
+- SELECT-ALL-THAT-APPLY: rewrite so exactly one choice is correct, or split into several MC questions.
+- SHORT ANSWER / SINGLE FILL-IN-THE-BLANK: NUM if the answer is a number; otherwise MC with the correct answer plus 3 plausible distractors.
+- ESSAY / OPEN RESPONSE: convert into one or more MC questions that test the key ideas.
+- IMAGES: Edugence cannot receive images. Set "image_ref": "" for EVERY question. Rewrite each stem so everything a student would need from a figure, table, diagram, graph, or structure is stated in words (element symbols, mass numbers, charges, data values, reaction equations, etc.). If a question truly cannot be answered without the picture and the picture cannot be described in words, still write the question but put "NEEDS IMAGE" at the start of its "title".
+- Keep question order; split questions stay together where the original was.`;
+
+  function edugenceModeOn() {
+    const box = document.getElementById('edugenceMode');
+    return !!(box && box.checked);
+  }
+
   function promptAddendum() {
-    if (!teks || !teks.items || !teks.items.length) return '';
-    return '\n\nTEKS TAGGING: For every question set "tek" to the single best-matching student expectation code from this list. Use ONLY codes from the list, exactly as written. If nothing fits, set "tek": "".\n' +
-      teks.items.map(t => t.code + ' — ' + t.text).join('\n');
+    let out = edugenceModeOn() ? EDUGENCE_RULES : '';
+    if (teks && teks.items && teks.items.length) {
+      out += '\n\nTEKS TAGGING: For every question set "tek" to the single best-matching student expectation code from this list. Use ONLY codes from the list, exactly as written. If nothing fits, set "tek": "".\n' +
+        teks.items.map(t => t.code + ' — ' + t.text).join('\n');
+    }
+    return out;
   }
 
   // ─── Tag existing questions with AI ────────────────────────────────────────
@@ -245,5 +267,5 @@ Rules:
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
-  return { promptAddendum, tagQuestionsWithAI, exportCSV, getTeks: () => teks };
+  return { promptAddendum, edugenceModeOn, tagQuestionsWithAI, exportCSV, getTeks: () => teks };
 })();
