@@ -55,6 +55,17 @@
     function close() { ov.remove(); box.remove(); }
     ov.onclick = close;
 
+    // MR is always multi-answer. MC is normally single-answer, but Edugence
+    // renders its A/B/C/D bubbles as independent checkboxes with no shared
+    // radio group, so a select-all-that-apply item legitimately arrives as an
+    // MC carrying two or more correct indices. Render those as checkboxes too,
+    // or opening the question here would silently drop every correct answer
+    // but the first. The flag is sticky for the life of the dialog: once a
+    // question is being edited as multi-answer, unticking down to one choice
+    // must not flip the controls back to radios mid-edit and strand the user.
+    var multiMC = draft.type === 'MC' && (draft.correct || []).length > 1;
+    function isMulti() { return draft.type === 'MR' || (draft.type === 'MC' && multiMC); }
+
     function answersEditor() {
       if (draft.type === 'TEXT' || draft.type === 'ESSAY') {
         return '<p style="font-size:13px;color:#888;margin:0">No answer choices for this type.</p>';
@@ -109,7 +120,7 @@
       }
 
       // MC / MR / TF
-      var multi = draft.type === 'MR';
+      var multi = isMulti();
       var rows = draft.answersHtml.map(function (a, i) {
         var on = (draft.correct || []).indexOf(i) !== -1;
         return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
@@ -325,7 +336,7 @@
       box.querySelectorAll('.edCorrect').forEach(function (c) {
         c.addEventListener('change', function () {
           var i = +this.dataset.i;
-          if (draft.type === 'MR') {
+          if (isMulti()) {
             if (this.checked) { if (draft.correct.indexOf(i) === -1) draft.correct.push(i); }
             else draft.correct = draft.correct.filter(function (x) { return x !== i; });
           } else {
