@@ -113,11 +113,11 @@ Rules:
 
 EDUGENCE MODE — THESE RULES OVERRIDE EVERY QUESTION-TYPE RULE ABOVE, INCLUDING THE FIB, SA, AND MR RULES:
 - The ONLY allowed types are "MC" and "NUM". Never output MR, TF, SA, FIB, ESSAY, or FILE.
-- MC = exactly 4 answer choices, exactly 1 correct. Choices must be distinct and plausible.
+- MC = exactly 4 answer choices. Choices must be distinct and plausible. Exactly 1 correct in almost every case: mark two or more choices correct ONLY when the source question genuinely asks the student to pick every option that applies. Never turn a single-answer question into a multi-answer one.
 - NUM = one numerical answer (sig-fig rules still apply; fill answers, suggested_answer, and blooket_distractors as before) AND set "edugence_answer" to the single value a student bubbles on a scantron: digits with an optional decimal point and minus sign only — no units, no commas, no fractions, no ranges, no scientific notation (e.g. "32", "0.045", "-273.15"). If the correct answer would need scientific notation or is otherwise not griddable, REWRITE the question so the answer is griddable (ask for the value "in units of 10²³", change the units, ask for the exponent or the coefficient, or make it a 4-choice MC).
 - MULTI-PART QUESTIONS (two or more answers, e.g. "find the pH and the pOH", "give the protons, electrons, neutrons, and mass number"): SPLIT them into separate questions, one per required answer. Each new question must repeat the shared context in its own body so it stands alone, e.g. "An ion has 8 protons and 8 neutrons and a charge of −2. How many electrons does it have?" → NUM. Never use [blank] markers.
 - TRUE/FALSE: rewrite as a 4-choice MC (e.g. turn the statement into a question with 4 options, or offer 4 statements of which exactly one is true).
-- SELECT-ALL-THAT-APPLY: rewrite so exactly one choice is correct, or split into several MC questions.
+- SELECT-ALL-THAT-APPLY: keep it as ONE MC question and list every correct choice in "correct". Do NOT split it into several questions and do NOT reduce it to a single correct answer. Make sure the stem tells the student to select all that apply.
 - SHORT ANSWER / SINGLE FILL-IN-THE-BLANK: NUM if the answer is a number; otherwise MC with the correct answer plus 3 plausible distractors.
 - ESSAY / OPEN RESPONSE: convert into one or more MC questions that test the key ideas.
 - IMAGES: Edugence cannot receive images. Set "image_ref": "" for EVERY question. Rewrite each stem so everything a student would need from a figure, table, diagram, graph, or structure is stated in words (element symbols, mass numbers, charges, data values, reaction equations, etc.). If a question truly cannot be answered without the picture and the picture cannot be described in words, still write the question but put "NEEDS IMAGE" at the start of its "title".
@@ -171,10 +171,10 @@ EDUGENCE MODE — THESE RULES OVERRIDE EVERY QUESTION-TYPE RULE ABOVE, INCLUDING
     if (already) { setStatus('✅ Every question is already MC or NUM with no image — nothing to convert.', 'done'); return; }
 
     setStatus('<span class="spinner"></span> Converting ' + questions.length + ' question(s) for Edugence…', 'loading');
-    const SYS = `You rewrite quiz questions so they fit Edugence, which accepts ONLY 4-choice single-answer multiple choice ("MC") and single-value numeric ("NUM") questions.
+    const SYS = `You rewrite quiz questions so they fit Edugence, which accepts ONLY 4-choice multiple choice ("MC", usually one correct answer but more than one is allowed for select-all-that-apply items) and single-value numeric ("NUM") questions.
 Return ONLY valid JSON — no markdown fences, no explanation:
 { "questions": [ { "source_id": 12, "type": "MC|NUM", "body": "", "answers": ["A","B","C","D"], "correct": [0], "suggested_answer": "", "blooket_distractors": [], "edugence_answer": "", "tek": "" } ] }
-- MC: "answers" = exactly 4 distinct choices, "correct" = [0-based index of the one correct choice], "suggested_answer" = text of the correct choice, "blooket_distractors" = [].
+- MC: "answers" = exactly 4 distinct choices, "correct" = array of 0-based indices of the correct choices — one index for a normal question, two or more ONLY for a genuine select-all-that-apply item, "suggested_answer" = text of the correct choice (or all of them, joined with "; ", when several are correct), "blooket_distractors" = [].
 - NUM: "answers" = ["[min, max]"] tight range around the sig-fig-correct value (E-notation for scientific notation), "correct" = [], "suggested_answer" = the value with units and a sig-fig note, "blooket_distractors" = 3 plausible wrong values, "edugence_answer" = the single griddable value (see the NUM rule below). For MC set "edugence_answer": "".
 - "source_id" = the id of the question it came from. Keep the original order; a split question produces consecutive entries with the same source_id.
 - Keep "tek" from the source unless you are given a TEKS list, in which case set the best-matching code from that list (exactly as written) or "" if none fits.
@@ -200,7 +200,7 @@ Return ONLY valid JSON — no markdown fences, no explanation:
         return sanitizeQuestion({
           id: nextId++, type: q.type, title: (src.title || '').replace(/^NEEDS IMAGE\s*/i, ''), points: pts,
           body: q.body, answers: q.type === 'MC' ? (q.answers || []).slice(0, 4) : [String((q.answers || [''])[0] || '')],
-          correct: q.type === 'MC' ? (q.correct || []).slice(0, 1) : [], fib_blanks: {}, image_ref: '',
+          correct: q.type === 'MC' ? [...new Set((q.correct || []).map(Number).filter(n => Number.isInteger(n) && n >= 0 && n < 4))].sort((a, b) => a - b) : [], fib_blanks: {}, image_ref: '',
           suggested_answer: q.suggested_answer || '', blooket_distractors: q.blooket_distractors || [], tek,
           edugence_answer: q.type === 'NUM' ? String(q.edugence_answer || '').trim() : '',
           feedback: { general: '', correct: '', incorrect: '' }
@@ -254,10 +254,15 @@ Return ONLY valid JSON — no markdown fences, no explanation:
       if (entries.length > 5) notes.push('only the first 5 choices exported');
       const keys = ['choice_a', 'choice_b', 'choice_c', 'choice_d', 'choice_e'];
       entries.slice(0, 5).forEach((e, k) => { base[keys[k]] = e.text; });
-      const pos = entries.findIndex(e => e.i === (q.correct || [])[0]);
-      if (pos < 0 || pos > 4) return { skip: 'no correct answer marked' };
+      // Map every correct index onto its exported letter: one letter for a normal
+      // question, several run together (e.g. "AC") for select-all-that-apply.
+      const positions = [...new Set((q.correct || [])
+        .map(ci => entries.findIndex(e => e.i === ci))
+        .filter(p => p >= 0 && p <= 4))].sort((a, b) => a - b);
+      if (!positions.length) return { skip: 'no correct answer marked' };
       base.type = 'MC';
-      base.correct = 'ABCDE'[pos];
+      base.correct = positions.map(p => 'ABCDE'[p]).join('');
+      if (positions.length > 1) notes.push('select all that apply — ' + positions.length + ' correct');
     } else if (q.type === 'NUM') {
       base.type = 'NUM';
       const value = String(q.edugence_answer || '').trim() || numericValue(q).value;
