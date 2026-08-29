@@ -1020,8 +1020,9 @@ function buildEditForm(q) {
         return `<div class="ans-row">
           <input type="${itype}" name="cor-${q.id}" ${chk?'checked':''} onchange="updateCorrect(${q.id},${i},this.checked)">
           <input type="text" value="${esc(a)}" placeholder="Answer option ${i+1}" oninput="getQ(${q.id}).answers[${i}]=this.value">
+          ${EdugenceImages.answerButton(q.id, i)}
           <button class="btn btn-red btn-sm" onclick="removeAns(${q.id},${i})">✕</button>
-        </div>`;
+        </div>${EdugenceImages.answerThumb(q.id, i)}`;
       }).join('');
       answersHtml = `
         <label>${multi?'Answers — check all that are correct':'Answers — select the correct one'}</label>
@@ -1182,6 +1183,7 @@ function removeAns(id, idx) {
   const q = getQ(id);
   if (!q || q.answers.length <= 1) return;
   q.answers.splice(idx, 1);
+  EdugenceImages.removeSlot(q, idx);
   q.correct = q.correct.filter(i => i !== idx).map(i => i > idx ? i-1 : i);
   reRenderCard(id);
   toggleEdit(id);
@@ -1782,12 +1784,15 @@ async function saveSettingsModel() {
 
 // ─── Image Picker Panel ────────────────────────────────────────────────────────
 let imgPickerTargetId = null;
+let imgPickerTargetSlot = null;   // null = question stem, number = answer index
 
-function openImgPicker(qId) {
+function openImgPicker(qId, slot) {
   imgPickerTargetId = qId;
+  imgPickerTargetSlot = (slot === undefined || slot === null) ? null : Number(slot);
   const q   = getQ(qId);
   const sub = document.getElementById('imgPickerSubtitle');
-  sub.textContent = 'Question: ' + (q ? q.body.substring(0, 60) + (q.body.length > 60 ? '…' : '') : '');
+  const where = imgPickerTargetSlot === null ? 'Question: ' : 'Choice ' + 'ABCDE'[imgPickerTargetSlot] + ' of: ';
+  sub.textContent = where + (q ? q.body.substring(0, 60) + (q.body.length > 60 ? '…' : '') : '');
 
   const grid  = document.getElementById('imgPickerGrid');
   const empty = document.getElementById('imgPickerEmpty');
@@ -1802,7 +1807,7 @@ function openImgPicker(qId) {
     grid.style.display  = 'grid';
     keys.forEach(key => {
       const im      = extractedImages[key];
-      const isActive = q && q.image_ref === key;
+      const isActive = q && EdugenceImages.getRef(q, imgPickerTargetSlot) === key;
       const cell    = document.createElement('div');
       cell.style.cssText = 'border:2px solid ' + (isActive ? '#6465F1' : '#e0e0f0') + ';border-radius:10px;overflow:hidden;cursor:pointer;transition:border-color .15s;background:#fafafe';
       cell.onclick = () => assignImgToQuestion(key);
@@ -1823,12 +1828,13 @@ function closeImgPicker() {
   document.getElementById('imgPickerOverlay').style.display = 'none';
   document.getElementById('imgPickerPanel').style.display   = 'none';
   imgPickerTargetId = null;
+  imgPickerTargetSlot = null;
 }
 
 function assignImgToQuestion(key) {
   const q = getQ(imgPickerTargetId);
   if (!q) return;
-  q.image_ref = key;
+  EdugenceImages.setRef(q, imgPickerTargetSlot, key);
   const savedId = imgPickerTargetId;
   closeImgPicker();
   reRenderCard(savedId);
@@ -1840,7 +1846,7 @@ function assignImgToQuestion(key) {
 function removeImgFromQuestion() {
   const q = getQ(imgPickerTargetId);
   if (!q) return;
-  q.image_ref = '';
+  EdugenceImages.setRef(q, imgPickerTargetSlot, '');
   const savedId = imgPickerTargetId;
   closeImgPicker();
   reRenderCard(savedId);
@@ -2492,6 +2498,11 @@ async function doMergeExport() {
       if (newQ.image_ref && keyMap[newQ.image_ref]) {
         newQ.image_ref = keyMap[newQ.image_ref];
       }
+      // Per-choice pictures are keyed the same way and must be re-pointed too,
+      // or a merged question keeps a choice image that now belongs to another file.
+      if (Array.isArray(newQ.answer_image_refs)) {
+        newQ.answer_image_refs = newQ.answer_image_refs.map(r => (r && keyMap[r]) ? keyMap[r] : r);
+      }
       mergedQuestions.push(newQ);
     }
   }
@@ -2745,6 +2756,7 @@ document.getElementById('blooketBtn').addEventListener('click', () => {
 <script src="test-export.js?v=7.9"></script>
 <script src="test-library.js?v=7.9"></script>
 <script src="test-editor.js?v=7.9"></script>
+<script src="edugence-images.js?v=7.9"></script>
 <script src="edugence-export.js?v=7.9"></script>
 <script src="test-builder.js?v=7.9"></script>
 

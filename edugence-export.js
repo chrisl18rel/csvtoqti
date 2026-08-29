@@ -7,7 +7,10 @@
 
 window.EdugenceExport = (() => {
   const TEKS_KEY = 'bg_edugence_teks_v1';
-  const CSV_HEADER = ['test_title', 'q_num', 'type', 'tek', 'question', 'choice_a', 'choice_b', 'choice_c', 'choice_d', 'choice_e', 'correct', 'num_value', 'num_min', 'num_max', 'notes'];
+  // image_q / image_a…image_e name a file inside the exported zip's images/
+  // folder. They stay blank on a question with no picture, and a CSV exported
+  // without images is still valid — the extension treats the columns as optional.
+  const CSV_HEADER = ['test_title', 'q_num', 'type', 'tek', 'question', 'choice_a', 'choice_b', 'choice_c', 'choice_d', 'choice_e', 'correct', 'num_value', 'num_min', 'num_max', 'image_q', 'image_a', 'image_b', 'image_c', 'image_d', 'image_e', 'notes'];
 
   let teks = loadTeks();
 
@@ -120,7 +123,7 @@ EDUGENCE MODE — THESE RULES OVERRIDE EVERY QUESTION-TYPE RULE ABOVE, INCLUDING
 - SELECT-ALL-THAT-APPLY: keep it as ONE MC question and list every correct choice in "correct". Do NOT split it into several questions and do NOT reduce it to a single correct answer. Make sure the stem tells the student to select all that apply.
 - SHORT ANSWER / SINGLE FILL-IN-THE-BLANK: NUM if the answer is a number; otherwise MC with the correct answer plus 3 plausible distractors.
 - ESSAY / OPEN RESPONSE: convert into one or more MC questions that test the key ideas.
-- IMAGES: Edugence cannot receive images. Set "image_ref": "" for EVERY question. Rewrite each stem so everything a student would need from a figure, table, diagram, graph, or structure is stated in words (element symbols, mass numbers, charges, data values, reaction equations, etc.). If a question truly cannot be answered without the picture and the picture cannot be described in words, still write the question but put "NEEDS IMAGE" at the start of its "title".
+- IMAGES: Edugence DOES accept images — the builder carries them across. Set "image_ref" to the key of the figure a question depends on, exactly as you would normally. Do NOT rewrite a figure into words and do NOT drop the reference. Still write the stem so the wording makes sense next to the picture rather than repeating it.
 - Keep question order; split questions stay together where the original was.`;
 
   function edugenceModeOn() {
@@ -167,8 +170,8 @@ EDUGENCE MODE — THESE RULES OVERRIDE EVERY QUESTION-TYPE RULE ABOVE, INCLUDING
   async function convertForEdugence() {
     if (!questions.length) { showAppAlert('Nothing to convert', 'Extract or add questions first.'); return; }
     if (!apiKey()) { showAppAlert('AI is locked', 'Click the ⚙ settings gear and enter your password to unlock AI.'); return; }
-    const already = questions.every(q => (q.type === 'MC' || q.type === 'NUM') && !q.image_ref);
-    if (already) { setStatus('✅ Every question is already MC or NUM with no image — nothing to convert.', 'done'); return; }
+    const already = questions.every(q => q.type === 'MC' || q.type === 'NUM');
+    if (already) { setStatus('✅ Every question is already MC or NUM — nothing to convert.', 'done'); return; }
 
     setStatus('<span class="spinner"></span> Converting ' + questions.length + ' question(s) for Edugence…', 'loading');
     const SYS = `You rewrite quiz questions so they fit Edugence, which accepts ONLY 4-choice multiple choice ("MC", usually one correct answer but more than one is allowed for select-all-that-apply items) and single-value numeric ("NUM") questions.
@@ -200,7 +203,12 @@ Return ONLY valid JSON — no markdown fences, no explanation:
         return sanitizeQuestion({
           id: nextId++, type: q.type, title: (src.title || '').replace(/^NEEDS IMAGE\s*/i, ''), points: pts,
           body: q.body, answers: q.type === 'MC' ? (q.answers || []).slice(0, 4) : [String((q.answers || [''])[0] || '')],
-          correct: q.type === 'MC' ? [...new Set((q.correct || []).map(Number).filter(n => Number.isInteger(n) && n >= 0 && n < 4))].sort((a, b) => a - b) : [], fib_blanks: {}, image_ref: '',
+          correct: q.type === 'MC' ? [...new Set((q.correct || []).map(Number).filter(n => Number.isInteger(n) && n >= 0 && n < 4))].sort((a, b) => a - b) : [], fib_blanks: {},
+          // The figure a question depends on survives the rewrite, and a split
+          // question keeps its parent's. Per-choice pictures cannot: the AI
+          // replaces the answer list wholesale, so nothing maps onto the old
+          // slots — re-attach those by hand after converting.
+          image_ref: src.image_ref || '', answer_image_refs: [],
           suggested_answer: q.suggested_answer || '', blooket_distractors: q.blooket_distractors || [], tek,
           edugence_answer: q.type === 'NUM' ? String(q.edugence_answer || '').trim() : '',
           feedback: { general: '', correct: '', incorrect: '' }
@@ -245,8 +253,7 @@ Return ONLY valid JSON — no markdown fences, no explanation:
   function questionToRow(q, num, title) {
     const notes = [];
     if (!q.tek) notes.push('no TEK');
-    if (q.image_ref) notes.push('has an image — add it in Edugence');
-    const base = { test_title: title, q_num: num, type: '', tek: q.tek || '', question: q.body || '', choice_a: '', choice_b: '', choice_c: '', choice_d: '', choice_e: '', correct: '', num_value: '', num_min: '', num_max: '', notes: '' };
+    const base = { test_title: title, q_num: num, type: '', tek: q.tek || '', question: q.body || '', choice_a: '', choice_b: '', choice_c: '', choice_d: '', choice_e: '', correct: '', num_value: '', num_min: '', num_max: '', image_q: '', image_a: '', image_b: '', image_c: '', image_d: '', image_e: '', notes: '' };
 
     if (q.type === 'MC' || q.type === 'TF') {
       const entries = (q.answers || []).map((a, i) => ({ text: String(a || '').trim(), i })).filter(e => e.text);
@@ -273,10 +280,15 @@ Return ONLY valid JSON — no markdown fences, no explanation:
       return { skip: q.type + ' is not supported in Edugence export' };
     }
     base.notes = notes.join('; ');
-    return { row: CSV_HEADER.map(h => base[h]) };
+    // Returned unassembled: image filenames are not known until every exported
+    // question has been numbered, so the row is turned into cells later.
+    return { base, notes };
   }
 
-  function exportCSV() {
+  // Exports a .zip holding the CSV plus an images/ folder, or a bare .csv when
+  // no question carries a picture — a test with no images should not force the
+  // extra unzip step on anyone.
+  async function exportCSV() {
     if (!questions.length) { showAppAlert('Nothing to export', 'No questions to export. Extract or add questions first.'); return; }
     const problems = validateForExport(false);
     if (problems.length) {
@@ -284,31 +296,73 @@ Return ONLY valid JSON — no markdown fences, no explanation:
       return;
     }
     const title = document.getElementById('quizTitle').value.trim() || 'Quiz';
-    const lines = [CSV_HEADER.map(csvCell).join(',')];
+    const exported = [];
     const skipped = [];
     let num = 1;
     questions.forEach((q, i) => {
       const r = questionToRow(q, num, title);
       if (r.skip) { skipped.push('Q' + (i + 1) + ': ' + r.skip); return; }
-      lines.push(r.row.map(csvCell).join(','));
+      exported.push({ q, num, base: r.base, notes: r.notes });
       num++;
     });
-    if (lines.length === 1) { showAppAlert('Nothing exported', 'No MC, TF, or NUM questions with answers were found.<br><br>' + skipped.join('<br>')); return; }
+    if (!exported.length) { showAppAlert('Nothing exported', 'No MC, TF, or NUM questions with answers were found.<br><br>' + skipped.join('<br>')); return; }
 
-    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    // Resize and name every picture, then write its filename into the row that
+    // uses it.
+    setStatus('Preparing images…', 'info');
+    let pack = { files: [], byNum: {}, stats: { count: 0, bytes: 0, resized: 0, broken: [] } };
+    try {
+      pack = await EdugenceImages.collect(exported.map(e => ({ q: e.q, num: e.num })), window.extractedImages || {});
+    } catch (e) {
+      showAppAlert('Images could not be prepared', esc(e.message) + '<br><br>Export it again without images, or re-extract the document.');
+      return;
+    }
+    const CHOICE_COLS = ['image_a', 'image_b', 'image_c', 'image_d', 'image_e'];
+    exported.forEach(e => {
+      const rec = pack.byNum[e.num] || { stem: '', choices: [] };
+      e.base.image_q = rec.stem || '';
+      CHOICE_COLS.forEach((col, i) => { e.base[col] = rec.choices[i] || ''; });
+      if (pack.stats.broken.length && rec.stem === '' && EdugenceImages.getRef(e.q, null)) {
+        e.notes.push('image could not be read');
+        e.base.notes = e.notes.join('; ');
+      }
+    });
+
+    const lines = [CSV_HEADER.map(csvCell).join(',')];
+    exported.forEach(e => lines.push(CSV_HEADER.map(h => csvCell(e.base[h])).join(',')));
+    const csv = '\uFEFF' + lines.join('\n');
+    const stem = title.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '_edugence';
+
+    let blob, fname;
+    if (pack.files.length) {
+      const zip = new JSZip();
+      zip.file(stem + '.csv', csv);
+      const imgs = zip.folder('images');
+      pack.files.forEach(f => imgs.file(f.name, f.data, { base64: true }));
+      blob = await zip.generateAsync({ type: 'blob' });
+      fname = stem + '.zip';
+    } else {
+      blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      fname = stem + '.csv';
+    }
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = title.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '_edugence.csv';
+    a.download = fname;
     document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
 
     const untagged = questions.filter(q => !q.tek).length;
     const notGriddable = questions.map((q, i) => q.type === 'NUM' && !GRIDDABLE.test(String(q.edugence_answer || '').trim() || numericValue(q).value) ? 'Q' + (i + 1) : '').filter(Boolean);
-    let msg = '✅ Edugence CSV downloaded — ' + (num - 1) + ' question(s).';
+    let msg = '✅ Edugence ' + (pack.files.length ? 'package' : 'CSV') + ' downloaded — ' + exported.length + ' question(s)';
+    if (pack.files.length) msg += ' and ' + pack.stats.count + ' image(s), ' + EdugenceImages.humanSize(pack.stats.bytes) + (pack.stats.resized ? ' (' + pack.stats.resized + ' resized down to ' + EdugenceImages.MAX_W + 'px)' : '') + '.';
+    else msg += '.';
+    if (pack.stats.bytes > EdugenceImages.STORAGE_WARN) msg += ' That is close to the browser extension\u2019s 10MB limit — if a run stops partway, split the test in two.';
     if (untagged) msg += ' ' + untagged + ' without a TEK (the builder will skip the SE step for those).';
+    if (pack.stats.broken.length) msg += ' Could not read: ' + pack.stats.broken.join(', ') + '.';
     if (notGriddable.length) msg += ' Not griddable, fix the Edugence Answer box: ' + notGriddable.join(', ') + '.';
     if (skipped.length) msg += ' Skipped: ' + skipped.join('; ') + '.';
-    setStatus(msg, skipped.length || untagged || notGriddable.length ? 'error' : 'done');
+    setStatus(msg, skipped.length || untagged || notGriddable.length || pack.stats.broken.length ? 'error' : 'done');
     document.getElementById('statusMsg').classList.add('show');
   }
 
