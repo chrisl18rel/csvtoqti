@@ -312,7 +312,7 @@ Return ONLY valid JSON — no markdown fences, no explanation:
     setStatus('Preparing images…', 'info');
     let pack = { files: [], byNum: {}, stats: { count: 0, bytes: 0, resized: 0, broken: [] } };
     try {
-      pack = await EdugenceImages.collect(exported.map(e => ({ q: e.q, num: e.num })), window.extractedImages || {});
+      pack = await EdugenceImages.collect(exported.map(e => ({ q: e.q, num: e.num })), EdugenceImages.bank());
     } catch (e) {
       showAppAlert('Images could not be prepared', esc(e.message) + '<br><br>Export it again without images, or re-extract the document.');
       return;

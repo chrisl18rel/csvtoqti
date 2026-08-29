@@ -25,6 +25,15 @@ window.EdugenceImages = (() => {
   // picture on every item still fits inside the extension's 10MB storage quota.
   const MAX_W = 800;
 
+  // index.html declares `let extractedImages`, and a top-level `let` creates a
+  // global *lexical* binding, not a property on window — so window.extractedImages
+  // is undefined even though `extractedImages` resolves fine. Everything here goes
+  // through this one accessor, guarded so load order can never make it throw.
+  function bank() {
+    try { return typeof extractedImages !== 'undefined' && extractedImages ? extractedImages : {}; }
+    catch (e) { return {}; }
+  }
+
   // ─── Per-choice refs ───────────────────────────────────────────────────────
   // slot: null/undefined = the question stem, a number = that answer index.
   function refsFor(q) {
@@ -56,7 +65,7 @@ window.EdugenceImages = (() => {
   function answerButton(qid, i) {
     const q = typeof getQ === 'function' ? getQ(qid) : null;
     const ref = getRef(q, i);
-    const has = !!(ref && window.extractedImages && window.extractedImages[ref]);
+    const has = !!(ref && bank()[ref]);
     return '<button class="btn ' + (has ? 'btn-navy' : 'btn-gray') + ' btn-sm" ' +
       'title="' + (has ? 'Change or remove this choice’s image' : 'Add an image to this choice') + '" ' +
       'onclick="openImgPicker(' + qid + ',' + i + ')" ' +
@@ -67,7 +76,7 @@ window.EdugenceImages = (() => {
   function answerThumb(qid, i) {
     const q = typeof getQ === 'function' ? getQ(qid) : null;
     const ref = getRef(q, i);
-    const im = ref && window.extractedImages ? window.extractedImages[ref] : null;
+    const im = ref ? bank()[ref] : null;
     if (!im) return '';
     return '<div style="margin:-2px 0 8px 30px;display:flex;align-items:center;gap:8px">' +
       '<img src="data:' + im.mime + ';base64,' + im.data + '" ' +
@@ -122,6 +131,7 @@ window.EdugenceImages = (() => {
   //
   // Returns { files: [{ name, data }], byNum: { num: { stem, choices[] } }, stats }
   async function collect(rows, images, maxW) {
+    images = images || bank();
     const files = [];
     const byNum = {};
     const seen = {};           // extractedImages key + size → filename, so one
@@ -157,6 +167,23 @@ window.EdugenceImages = (() => {
     return { files, byNum, stats };
   }
 
+  // True when anything in the current question set would put a picture in the
+  // export — drives the button label so it never promises the wrong file type.
+  function anyImages(qs) {
+    const imgs = bank();
+    return (qs || []).some(q => {
+      if (getRef(q, null) && imgs[getRef(q, null)]) return true;
+      return (q.answer_image_refs || []).some(r => r && imgs[r]);
+    });
+  }
+
+  // Keeps the Export button honest: zip when there are pictures, CSV when not.
+  function refreshExportLabel(qs) {
+    const btn = document.getElementById('edugenceBtn');
+    if (!btn) return;
+    btn.textContent = anyImages(qs) ? '🟣 Export Edugence ZIP' : '🟣 Export Edugence CSV';
+  }
+
   function humanSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
@@ -168,7 +195,7 @@ window.EdugenceImages = (() => {
   const STORAGE_WARN = 7 * 1024 * 1024;
 
   return {
-    MAX_W, STORAGE_WARN,
+    MAX_W, STORAGE_WARN, bank, anyImages, refreshExportLabel,
     getRef, setRef, removeSlot,
     answerButton, answerThumb,
     downscale, collect, humanSize, extFor
