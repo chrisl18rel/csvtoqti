@@ -1,4 +1,4 @@
-# Batch Genie — Quiz Tools for Canvas (v7.9)
+# Batch Genie — Quiz Tools for Canvas (v8.5)
 
 Two tools on one page, switched with the tabs at the top:
 
