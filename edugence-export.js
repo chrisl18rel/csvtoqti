@@ -361,9 +361,19 @@ Return ONLY valid JSON — no markdown fences, no explanation:
     if (untagged) msg += ' ' + untagged + ' without a TEK (the builder will skip the SE step for those).';
     if (pack.stats.broken.length) msg += ' Could not read: ' + pack.stats.broken.join(', ') + '.';
     if (notGriddable.length) msg += ' Not griddable, fix the Edugence Answer box: ' + notGriddable.join(', ') + '.';
-    if (skipped.length) msg += ' Skipped: ' + skipped.join('; ') + '.';
+    if (skipped.length) msg += ' ' + skipped.length + ' question(s) left out — see the notice.';
     setStatus(msg, skipped.length || untagged || notGriddable.length || pack.stats.broken.length ? 'error' : 'done');
     document.getElementById('statusMsg').classList.add('show');
+    // Left-out questions used to be a clause at the end of the status line,
+    // easy to miss on a long test. Put them in front of the user instead: these
+    // are questions the extension will never see, so the Edugence test will be
+    // short by exactly this many unless they are fixed here and re-exported.
+    if (skipped.length) {
+      showAppAlert(skipped.length + ' question(s) NOT in the Edugence file',
+        'The file has ' + exported.length + ' question(s). These were left out and will be missing from the Edugence test:' +
+        '<ul style="margin:8px 0 0;padding-left:20px">' + skipped.map(s => '<li style="margin-bottom:4px">' + esc(s) + '</li>').join('') + '</ul>' +
+        '<p style="margin:10px 0 0">Mark a correct answer or convert the type (Convert for Edugence), then export again.</p>');
+    }
   }
 
   // ─── Wire up ───────────────────────────────────────────────────────────────
